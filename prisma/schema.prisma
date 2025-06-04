@@ -1,0 +1,107 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // provider = "mysql"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Users {
+  id Int @id @default(autoincrement())
+  email String  @unique
+  password String 
+  firstName String
+  lastName String
+  gender Int @default(0)
+  role Int @default(1)
+  telp String @default("")
+  buka_toko Int @default(0)
+  nama_toko String @default("")
+  klasifikasi_toko Int @default(0)
+  rating_toko Float @default(0)
+  alamat_toko Int?
+  almt_tk Alamat? @relation(name: "AlamatToko", fields: [alamat_toko], references: [id])
+  alamat Alamat[] @relation(name: "AlamatUser")
+  product Product[]
+  transaksi Transaksi[]
+  review Review[]
+  likes Likes[]
+  pengajuan Pengajuan[] @relation(name: "UserPengajuan")
+  accBy     Pengajuan[] @relation(name: "AccByPengajuan")
+}
+
+model Product {
+  id Int @id @default(autoincrement())
+  userId  Int
+  user Users @relation(fields: [userId], references: [id]) // foreign Key
+  nama String
+  stock Int
+  harga Int
+  desc String
+  path String
+  transaksi Transaksi[]
+  review Review[]
+  likes Likes[]
+  
+}
+
+model Transaksi {
+  id Int @id @default(autoincrement())
+  userId Int
+  user Users @relation(fields: [userId], references: [id])
+  productId Int
+  product Product @relation(fields: [productId], references: [id])
+  status Int
+}
+
+model Review {
+  id Int @id @default(autoincrement())
+  userId Int
+  user Users @relation(fields: [userId], references: [id])
+  productId Int
+  product Product @relation(fields: [productId], references: [id])
+  review String
+  rating Float
+}
+
+model Likes {
+  id Int @id @default(autoincrement())
+  userId Int
+  user Users @relation(fields: [userId], references: [id])
+  productId Int
+  product Product @relation(fields: [productId], references: [id])
+  time DateTime
+}
+
+model Alamat {
+  id Int @id @default(autoincrement())
+  userId Int
+  users Users @relation(name: "AlamatUser", fields: [userId], references: [id])
+  toko Users[] @relation(name: "AlamatToko")
+  provinsi String
+  kabupaten String
+  kecamatan String
+  desa String
+  kode_pos String
+  detail String @default("")
+  catatan String @default("")
+}
+
+model Pengajuan {
+  id       Int    @id @default(autoincrement())
+  userId   Int
+  users    Users  @relation(name: "UserPengajuan", fields: [userId], references: [id])
+  time     DateTime
+  status   Int
+  accBy    Int
+  AccBy    Users  @relation(name: "AccByPengajuan", fields: [accBy], references: [id])
+}

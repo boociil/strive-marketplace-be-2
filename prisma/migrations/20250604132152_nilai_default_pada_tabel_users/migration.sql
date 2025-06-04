@@ -1,0 +1,11 @@
+-- AlterTable
+ALTER TABLE "Alamat" ALTER COLUMN "detail" SET DEFAULT '',
+ALTER COLUMN "catatan" SET DEFAULT '';
+
+-- AlterTable
+ALTER TABLE "Users" ALTER COLUMN "role" SET DEFAULT 1,
+ALTER COLUMN "telp" SET DEFAULT '',
+ALTER COLUMN "buka_toko" SET DEFAULT 0,
+ALTER COLUMN "nama_toko" SET DEFAULT '',
+ALTER COLUMN "klasifikasi_toko" SET DEFAULT 0,
+ALTER COLUMN "rating_toko" SET DEFAULT 0;
