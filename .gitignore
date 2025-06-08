@@ -1,0 +1,16 @@
+# Node
+node_modules/
+dist/
+.env
+*.log
+
+# VS Code
+.vscode/
+
+# Prisma
+.prisma/
+*.db
+
+# macOS
+.DS_Store
+
