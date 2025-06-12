@@ -33,17 +33,19 @@ model Users {
   buka_toko Int @default(0)
   nama_toko String @default("")
   klasifikasi_toko Int @default(0)
-  rating_toko Float @default(0)
-  alamat_toko Int?
-  almt_tk Alamat? @relation(name: "AlamatToko", fields: [alamat_toko], references: [id])
   alamat Alamat[] @relation(name: "AlamatUser")
+  rating_toko Float @default(0)
   product Product[]
   transaksi Transaksi[]
   review Review[]
   cart Cart[]
-  pengajuan Pengajuan[] @relation(name: "UserPengajuan")
-  accBy     Pengajuan[] @relation(name: "AccByPengajuan")
+  time_pengajuan DateTime?
+  time_terima DateTime?
+  status_pengajuan Int @default(0)
+  acc_by Int?
+  path_file String @default("")
 }
+
 
 model Product {
   id Int @id @default(autoincrement())
@@ -76,6 +78,7 @@ model Review {
   product Product @relation(fields: [productId], references: [id])
   review String
   rating Float
+  time DateTime?
 }
 
 model Cart {
@@ -92,7 +95,6 @@ model Alamat {
   id Int @id @default(autoincrement())
   userId Int
   users Users @relation(name: "AlamatUser", fields: [userId], references: [id])
-  toko Users[] @relation(name: "AlamatToko")
   provinsi String
   kabupaten String
   kecamatan String
@@ -100,13 +102,7 @@ model Alamat {
   kode_pos String
   detail String @default("")
   catatan String @default("")
+  is_toko Int @default(0) // 0 = alamat biasa, 1 = alamat toko
+  is_default Int @default(0) // 0 = bukan alamat default, 1 = alamat default
 }
 
-model Pengajuan {
-  id       Int    @id @default(autoincrement())
-  userId   Int
-  time     DateTime
-  status   Int
-  accBy    Int
-  AccBy    Users  @relation(name: "AccByPengajuan", fields: [accBy], references: [id])
-}
