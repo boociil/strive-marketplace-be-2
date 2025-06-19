@@ -98,7 +98,19 @@ app.get('/api/v1/users/:id', async (req, res) => {
 });
 
 app.get('/api/v1/users', async (req, res) => {
-    const users = await prisma.users.findMany();
+    const users = await prisma.users.findMany({
+        select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            telp: true,
+            nama_toko: true,
+            klasifikasi_toko: true,
+            rating_toko: true,
+            buka_toko: true,
+        }
+    });
     res.json(users);
 });
 
