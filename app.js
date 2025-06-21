@@ -12,7 +12,7 @@ const prisma = new PrismaClient();
 
 const port = 3001
 
-// agar API bisa diakses
+// agar API bisa dia kses
 const cors = require('cors');
 const path = require('path');
 
@@ -56,6 +56,25 @@ function authenticateAdmin(req, res, next) {
 app.get('/', (req, res) => {
     res.send('API Connected');
 });
+
+// API untuk mendapatkan file gambar
+app.get("/pict/:id_product/:filename", (req, res) => {
+    const { id_product, filename } = req.params;
+  
+    // Tentukan path file gambar berdasarkan ID product dan nama file
+    const filePath = path.join(__dirname, "img", "product", id_product, filename);
+  
+    // Cek apakah file ada
+    res.sendFile(filePath, (err) => {
+      if (err) {
+        console.error(err);
+        res.status(404).json({
+          success: false,
+          message: "File tidak ditemukan",
+        });
+      }
+    });
+  });
 
 app.get('/api/v1/users/:id', async (req, res) => {
     const { id } = req.params;
@@ -133,7 +152,6 @@ app.get('/api/v1/product', async (req, res) => {
         // Hitung total hasil pencarian
         const totalData = await prisma.product.count({
             where: {
-                stock: { gt: 0 },
                 nama: keywordTrimmed ? {
                     contains: keywordTrimmed,
                     mode: 'insensitive'
@@ -152,11 +170,18 @@ app.get('/api/v1/product', async (req, res) => {
         }
 
         const result = await prisma.product.findMany({
-            include: {
+             select: {
+                id: true,
+                nama: true,
                 user: {
                     select: {
                         nama_toko: true,
                         rating_toko: true
+                    }
+                },
+                variasi: {
+                    select: {
+                        harga: true
                     }
                 }
             },
@@ -164,7 +189,7 @@ app.get('/api/v1/product', async (req, res) => {
             skip: skip,
             orderBy: order,
             where: {
-                stock: { gt: 0 },
+                // stock: { gt: 0 },
                 nama: keywordTrimmed ? {
                     contains: keywordTrimmed,
                     mode: 'insensitive'
@@ -506,6 +531,8 @@ app.get('/api/v1/review', async (req, res) => {
 }
 );
 
+
+
 // POST API
 
 app.post('/api/v1/review', async (req, res) => {
@@ -565,15 +592,29 @@ app.post('/api/v1/review', async (req, res) => {
 );
 
 app.post('/api/v1/register', async (req, res) => {
-    const { name, email, password } = req.body;
+    const { firstName, lastName, email, pass } = req.body;
+    console.log(req.body);
+    
+    if (!firstName || !lastName || !email || !pass) {
+        return res.status(400).json({
+            success: false,
+            message: "Data tidak lengkap",
+        });
+    }
   
-    const hashedPass = await bcrypt.hash(password, 10);
+    const hashedPass = await bcrypt.hash(pass, 10);
     
     const user = await prisma.users.create({
-        data: { name, email, password:hashedPass }, 
+        data: { firstName, lastName, email, password: hashedPass },
     });
+
+    console.log("user created:", user);
     
-    res.json(user);
+    
+    res.status(200).json({
+        success: true,
+        user
+    });
 });
 
 app.post('/api/v1/transaksi', async (req, res) => {
@@ -731,6 +772,8 @@ app.post("/api/v1/login", async (req,res) => {
     try {     
 
         const {email, password} = req.body;
+        console.log(req.body);
+        
         
         
         // const hashedPass = await bcrypt.hash(password, 10);
@@ -774,20 +817,30 @@ app.post("/api/v1/login", async (req,res) => {
                     "nama_toko" : uniqueUser.nama_toko,
                     "buka_toko": uniqueUser.buka_toko,
                     "klasifikasi_toko": uniqueUser.klasifikasi_toko,
-                    "rating_toko": uniqueUser.rating_toko,
-                    
+                    "rating_toko": uniqueUser.rating_toko,   
                 }
 
                 // TOKEN
                 const token = jwt.sign(info,secretKey);
                 
+                console.log(token);
+                
 
                 return res.status(200).send({
+                    success: true,
                     message:"Login Success",
                     token:token,
                 })
+                // setTimeout(() => {
+                //     res.status(200).json({
+                //         success: true,
+                //         message: "Login Success",
+                //         token: token,
+                //     });
+                // }, 5000);
+
             }else{
-                return res.status(400).json({
+                return res.status(200).json({
                     success: false,
                     message: "Salah Password",ß
                 });
@@ -795,7 +848,7 @@ app.post("/api/v1/login", async (req,res) => {
         }
         
     } catch (error) {
-        return res.status(500).json({
+        return res.status(200).json({
             success: false,
             message: "Terjadi Kesalahan",
             error : error,
