@@ -173,6 +173,7 @@ app.get('/api/v1/product', async (req, res) => {
              select: {
                 id: true,
                 nama: true,
+                path: true,
                 user: {
                     select: {
                         nama_toko: true,
@@ -182,7 +183,8 @@ app.get('/api/v1/product', async (req, res) => {
                 variasi: {
                     select: {
                         harga: true
-                    }
+                    },
+                    take: 1 
                 }
             },
             take: totalQ,
@@ -196,6 +198,14 @@ app.get('/api/v1/product', async (req, res) => {
                 } : undefined
             }
         });
+
+        if (orderBy === "harga_desc" || orderBy === "harga_asc") {
+            result.sort((a, b) => {
+                const hargaA = a.variasi[0]?.harga ?? 0;
+                const hargaB = b.variasi[0]?.harga ?? 0;
+                return orderBy === "harga_desc" ? hargaB - hargaA : hargaA - hargaB;
+            });
+        }
 
         return res.status(200).send({
             success: true,
@@ -223,7 +233,14 @@ app.get('/api/v1/product/:id', async (req, res) => {
                 user: {
                     select: {
                         nama_toko: true,
-                        rating_toko: true
+                        rating_toko: true,
+                    }
+                },
+                variasi :{
+                    select: {
+                        nama : true,
+                        harga: true,
+                        stok: true,
                     }
                 }
             }
