@@ -177,7 +177,8 @@ app.get('/api/v1/product', async (req, res) => {
                 user: {
                     select: {
                         nama_toko: true,
-                        rating_toko: true
+                        rating_toko: true,
+                        
                     }
                 },
                 variasi: {
@@ -189,7 +190,6 @@ app.get('/api/v1/product', async (req, res) => {
             },
             take: totalQ,
             skip: skip,
-            orderBy: order,
             where: {
                 // stock: { gt: 0 },
                 nama: keywordTrimmed ? {
@@ -234,10 +234,12 @@ app.get('/api/v1/product/:id', async (req, res) => {
                     select: {
                         nama_toko: true,
                         rating_toko: true,
+                        telp: true,
                     }
                 },
                 variasi :{
                     select: {
+                        id: true,
                         nama : true,
                         harga: true,
                         stok: true,
@@ -846,6 +848,7 @@ app.post("/api/v1/login", async (req,res) => {
                 return res.status(200).send({
                     success: true,
                     message:"Login Success",
+                    id_user:uniqueUser.id,
                     token:token,
                 })
                 // setTimeout(() => {
@@ -926,7 +929,9 @@ app.post("/api/v1/pengajuan", async (req, res) => {
 });
 
 app.post("/api/v1/add_to_cart", async (req, res) => {   
-    const { userId, productId, quantity } = req.body;
+    const { userId, productId, quantity, variasiId } = req.body;
+    console.log(req.body);
+    
     try {
         // Cek apakah user sudah ada di cart
         const existingCart = await prisma.cart.findFirst({
@@ -942,6 +947,7 @@ app.post("/api/v1/add_to_cart", async (req, res) => {
                 where: { id: existingCart.id },
                 data: { 
                     quantity: existingCart.quantity + parseInt(quantity),
+                    variasiId : variasiId,
                     time : new Date(), 
                 }
             });
@@ -957,6 +963,7 @@ app.post("/api/v1/add_to_cart", async (req, res) => {
                     userId: parseInt(userId),
                     productId: parseInt(productId),
                     quantity: parseInt(quantity),
+                    variasiId : variasiId,
                     time: new Date(),
                 }
             });
