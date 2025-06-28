@@ -358,24 +358,42 @@ app.get('/api/v1/cart', async (req, res) => {
     try {
         const {userId} = req.query;
 
+        console.log(req.query);
+        
+        
         const allUserCart = await prisma.cart.findMany({
             where: {
                 userId: parseInt(userId)
             },
-            include: {
+            select: {
+                quantity: true,
+                time: true,
                 product: {
                     select: {
+                        id: true,
                         nama: true,
-                        harga: true,
                         path: true,
-                        stock: true
-                    },
-                    where: {
-                        stock : {gt:0}
+                        user: { // ambil properti toko dari user (toko)
+                            select: {
+                                nama_toko: true,
+                                rating_toko: true,
+                                klasifikasi_toko: true,
+                                buka_toko: true,
+                                // tambahkan field lain sesuai kebutuhan
+                            }
+                        }
+                    }
+                },
+                variasi: {
+                    select: {
+                        harga: true,
+                        stok: true,
                     }
                 }
             }
         });
+        console.log(allUserCart);
+        
 
         return res.status(200).send({
             success: true,
