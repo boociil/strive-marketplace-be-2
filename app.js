@@ -842,7 +842,7 @@ app.post("/api/v1/login", async (req,res) => {
                 // TOKEN
                 const token = jwt.sign(info,secretKey);
                 
-                console.log(token);
+                // console.log(token);
                 
 
                 return res.status(200).send({
