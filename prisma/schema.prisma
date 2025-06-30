@@ -44,6 +44,7 @@ model Users {
   status_pengajuan Int @default(0)
   acc_by Int?
   path_file String @default("")
+  tanggal_lahir Date
 }
 
 
