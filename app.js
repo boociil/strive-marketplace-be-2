@@ -373,13 +373,12 @@ app.get('/api/v1/cart', async (req, res) => {
                         id: true,
                         nama: true,
                         path: true,
-                        user: { // ambil properti toko dari user (toko)
+                        user: { 
                             select: {
                                 nama_toko: true,
                                 rating_toko: true,
                                 klasifikasi_toko: true,
                                 buka_toko: true,
-                                // tambahkan field lain sesuai kebutuhan
                             }
                         }
                     }
