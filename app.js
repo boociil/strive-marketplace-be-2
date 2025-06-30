@@ -319,8 +319,20 @@ app.get('/api/v1/toko', async (req, res) => {
                 nama_toko: true,
                 rating_toko: true,
                 klasifikasi_toko: true,
-                alamat_toko: true,
                 buka_toko: true,
+                alamat: {
+                    where: {
+                        is_toko: 1
+                    },
+                    select: {
+                        provinsi: true,
+                        kabupaten: true,
+                        kecamatan: true,
+                        desa: true,
+                        kode_pos: true,
+                        detail: true
+                    }
+                }
             },
             where: {
                 buka_toko: 1,
@@ -809,7 +821,7 @@ app.post("/api/v1/login", async (req,res) => {
 
         const {email, password} = req.body;
         console.log(req.body);
-        
+        // console.log("valid");
         
         
         // const hashedPass = await bcrypt.hash(password, 10);
@@ -826,12 +838,16 @@ app.post("/api/v1/login", async (req,res) => {
                 nama_toko:true,
                 klasifikasi_toko: true,
                 rating_toko: true,
+                gender: true,
+                // tanggal_lahir: true,
+                path_file: true,
             },
             where : {
                 email : email,
             }
         });
 
+        
         
         if (!uniqueUser){
             // Kalo misalnya email gaada
@@ -843,6 +859,7 @@ app.post("/api/v1/login", async (req,res) => {
             const isValidPassword = await bcrypt.compare(password,uniqueUser.password);
             
             if(isValidPassword){
+                
                 const info = {
                     "id" : uniqueUser.id,
                     "firstName": uniqueUser.firstName,
@@ -867,7 +884,20 @@ app.post("/api/v1/login", async (req,res) => {
                     message:"Login Success",
                     id_user:uniqueUser.id,
                     token:token,
+                    role:uniqueUser.role,
+                    firstname : uniqueUser.firstName,
+                    lastname : uniqueUser.lastName,
+                    email : uniqueUser.email,
+                    gender : uniqueUser.gender,
+                    tanggal_lahir : uniqueUser.tanggal_lahir,
+                    telp :uniqueUser.telp,    
+                    nama_toko : uniqueUser.nama_toko,
+                    buka_toko: uniqueUser.buka_toko,
+                    klasifikasi_toko: uniqueUser.klasifikasi_toko,
+                    rating_toko: uniqueUser.rating_toko,  
+                    path_file: uniqueUser.path_file,  
                 })
+
                 // setTimeout(() => {
                 //     res.status(200).json({
                 //         success: true,
