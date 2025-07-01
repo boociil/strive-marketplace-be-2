@@ -19,7 +19,7 @@ const path = require('path');
 const secretKey = "hkalshd9832yhui234hg234gjksdfsdnbnsvoisdsii";
 
 app.use(cors());
-
+app.use('/img', express.static(path.join(__dirname, 'img')));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
@@ -822,7 +822,7 @@ app.post("/api/v1/login", async (req,res) => {
                 klasifikasi_toko: true,
                 rating_toko: true,
                 gender: true,
-                // tanggal_lahir: true,
+                tanggal_lahir: true,
                 path_file: true,
             },
             where : {
