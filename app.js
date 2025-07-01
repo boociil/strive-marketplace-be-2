@@ -10,6 +10,7 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
+
 const port = 3001
 
 // agar API bisa dia kses
@@ -366,28 +367,129 @@ app.get('/api/v1/toko', async (req, res) => {
     }
 });
 
+app.get('/api/v1/detail_pengajuan/:id', async (req,res) => {
+
+    try {
+        const { id } = req.params;
+    
+        const toko = await prisma.users.findFirst({
+            where : {
+                id : id
+            },
+            select : {
+                nama_toko : true,
+                klasifikasi_toko : true,
+                rating_toko : true,
+                status_pengajuan : true,
+                time_terima : true,
+                time_pengajuan : true,
+                path_file : true,
+            }
+        })
+
+        return res.status(200).send({
+            success: true,
+            message: "Req berhasil",
+            data: result,
+        });
+
+    } catch (error) {
+        console.log(error);
+        return res.status(400).send({
+            success: false,
+            message: "terjadi kesalahan"
+        });
+    }
+
+})
+
+app.get('/api/v1/toko/:id', async (req,res) => {
+
+    try {
+        const { id } = req.params;
+    
+        const toko = await prisma.users.findFirst({
+            where : {
+                id : id
+            },
+            select : {
+                nama_toko : true,
+                klasifikasi_toko : true,
+                rating_toko : true,
+            },
+            include : {
+                alamat : {
+                    where : {
+                        is_toko : true
+                    },
+                    select : {
+                        provinsi : true,
+                        kabupaten : true,
+                        kecamatan : true,
+                        desa : true,
+                        kode_pos : true,
+                        detail : true,
+                    }
+                }
+            }
+        })
+
+        return res.status(200).send({
+            success: true,
+            message: "Req berhasil",
+            data: result,
+        });
+
+    } catch (error) {
+        console.log(error);
+        return res.status(400).send({
+            success: false,
+            message: "terjadi kesalahan"
+        });
+    }
+
+})
+
 app.get('/api/v1/cart', async (req, res) => {
     try {
         const {userId} = req.query;
 
+        console.log(req.query);
+        
+        
         const allUserCart = await prisma.cart.findMany({
             where: {
                 userId: parseInt(userId)
             },
-            include: {
+            select: {
+                quantity: true,
+                time: true,
                 product: {
                     select: {
+                        id: true,
                         nama: true,
-                        harga: true,
                         path: true,
-                        stock: true
-                    },
-                    where: {
-                        stock : {gt:0}
+                        user: { 
+                            select: {
+                                nama_toko: true,
+                                rating_toko: true,
+                                klasifikasi_toko: true,
+                                buka_toko: true,
+                            }
+                        }
+                    }
+                },
+                variasi: {
+                    select: {
+                        harga: true,
+                        stok: true,
+                        nama : true,
                     }
                 }
             }
         });
+        console.log(allUserCart);
+        
 
         return res.status(200).send({
             success: true,
