@@ -5,6 +5,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const fsp = require('fs/promises');
+// const upload = multer({ dest: 'uploads/' });
 
 const { PrismaClient } = require('@prisma/client');
 
@@ -19,10 +20,27 @@ const path = require('path');
 
 const secretKey = "hkalshd9832yhui234hg234gjksdfsdnbnsvoisdsii";
 
+// Setup penyimpanan file ke folder 'uploads/'
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, "uploads/ktp/");
+  },
+  filename: function (req, file, cb) {
+    const ext = path.extname(file.originalname);
+    const fileName = `ktp_${Date.now()}${ext}`;
+    cb(null, fileName);
+  }
+});
+
+const upload = multer({ storage: storage });
+
+
 app.use(cors());
-app.use('/img', express.static(path.join(__dirname, 'img')));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+
+app.use('/img', express.static(path.join(__dirname, 'img')));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Middleware untuk auth
 
@@ -1008,56 +1026,73 @@ app.post("/api/v1/login", async (req,res) => {
     }
 });
 
-app.post("/api/v1/pengajuan", async (req, res) => { 
-    try {
-        const { userId, nama_toko, telp, klasifikasi_toko, kode_pos, provinsi, kabupaten, kecamatan, desa, catatan, detail } = req.body;
+app.post("/api/v1/pengajuan", upload.single("ktp"), async (req, res) => {
+  try {
+    const {
+      userId,
+      nama_toko,
+      telp,
+      klasifikasi_toko,
+      kode_pos,
+      provinsi,
+      kabupaten,
+      kecamatan,
+      desa,
+      catatan,
+      detail
+    } = req.body;
 
-        // Cek apakah user sudah mengajukan sebelumnya
-        const existingRequest = await prisma.users.findFirst({
-            where: { status_pengajuan: 1, id: parseInt(userId) },
-            select: {
-                id: true,
-                status_pengajuan: true
-            }
-        });
+    const ktpFile = req.file;
 
-        if (existingRequest) {
-            return res.status(400).json({
-                success: false,
-                message: "User sudah mengajukan pembukaan toko sebelumnya"
-            });
-        }
-
-
-        const createPengajuan = await prisma.users.update({
-            data: {
-                time_pengajuan: new Date(),
-                time_terima: null,
-                status_pengajuan: 0,
-                acc_by: null,
-                nama_toko: nama_toko,
-                telp: telp, 
-                klasifikasi_toko: parseInt(klasifikasi_toko),
-                status_pengajuan: 1,
-            },
-            where: { id: parseInt(userId) }
-        });
-
-
-        return res.status(200).json({
-            success: true,
-            message: "Pengajuan pembukaan toko berhasil",
-        });
-
+    if (!ktpFile) {
+      return res.status(400).json({
+        success: false,
+        message: "File KTP wajib diunggah",
+      });
     }
-    catch (error) {
-        console.error("Server error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Terjadi Kesalahan",
-            data: error
-        });
+
+    // Cek apakah user sudah mengajukan sebelumnya
+    const existingRequest = await prisma.users.findFirst({
+      where: { status_pengajuan: 1, id: parseInt(userId) },
+      select: { id: true, status_pengajuan: true },
+    });
+
+    if (existingRequest) {
+      return res.status(400).json({
+        success: false,
+        message: "User sudah mengajukan pembukaan toko sebelumnya",
+      });
     }
+
+    // Simpan pengajuan dan file path KTP (opsional: simpan nama file di kolom 'ktp')
+    const createPengajuan = await prisma.users.update({
+      data: {
+        time_pengajuan: new Date(),
+        time_terima: null,
+        status_pengajuan: 1,
+        acc_by: null,
+        nama_toko: nama_toko,
+        telp: telp,
+        buka_toko: 1,
+        klasifikasi_toko: parseInt(klasifikasi_toko),
+        ktp_path: ktpFile.filename, // pastikan ada kolom di database kalau ini digunakan
+      },
+      where: { id: parseInt(userId) },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Pengajuan pembukaan toko berhasil",
+      file_url: `/uploads/${ktpFile.filename}`,
+    });
+  } catch (error) {
+    console.error("Server error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Terjadi Kesalahan",
+      data: error.message,
+    });
+  }
 });
 
 app.post("/api/v1/add_to_cart", async (req, res) => {   
