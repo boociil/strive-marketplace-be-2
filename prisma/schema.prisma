@@ -121,7 +121,7 @@ model Alamat {
   desa      Desa      @relation(fields: [kodeProv, kodeKab, kodeKec, kodeDesa], references: [kodeProv, kodeKab, kodeKec, kode])
 
   detail     String @default("")
-  catatan    String @default("")
+  bangunan   String @default("")
   is_toko    Int    @default(0) // 0 = alamat biasa, 1 = alamat toko
   is_default Int    @default(0) // 0 = bukan alamat default, 1 = alamat default
 }
