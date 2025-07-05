@@ -13,160 +13,160 @@ generator client {
   binaryTargets = ["native", "darwin-arm64"]
 }
 
-
 datasource db {
   // provider = "mysql"
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
 model Users {
-  id Int @id @default(autoincrement())
-  email String  @unique
-  password String 
-  firstName String
-  lastName String
-  gender Int @default(0)
-  role Int @default(1)
-  telp String @default("")
-  buka_toko Int @default(0)
-  nama_toko String @default("")
-  klasifikasi_toko Int @default(0)
-  alamat Alamat[] @relation(name: "AlamatUser")
-  rating_toko Float @default(0)
-  product Product[]
-  transaksi Transaksi[]
-  review Review[]
-  cart Cart[]
-  time_pengajuan DateTime?
-  time_terima DateTime?
-  status_pengajuan Int @default(0)
-  acc_by Int?
-  path_file String @default("")
-  tanggal_lahir DateTime?
-  ktp_path String? 
+  id               Int         @id @default(autoincrement())
+  email            String      @unique
+  password         String
+  firstName        String
+  lastName         String
+  gender           Int         @default(0)
+  role             Int         @default(1)
+  telp             String      @default("")
+  buka_toko        Int         @default(0)
+  nama_toko        String      @default("")
+  klasifikasi_toko Int         @default(0)
+  alamat           Alamat[]    @relation(name: "AlamatUser")
+  rating_toko      Float       @default(0)
+  product          Product[]
+  transaksi        Transaksi[]
+  review           Review[]
+  cart             Cart[]
+  time_pengajuan   DateTime?
+  time_terima      DateTime?
+  status_pengajuan Int         @default(0)
+  acc_by           Int?
+  path_file        String      @default("")
+  tanggal_lahir    DateTime?
+  ktp_path         String?
 }
 
-
 model Product {
-  id Int @id @default(autoincrement())
-  userId  Int
-  user Users @relation(fields: [userId], references: [id]) // foreign Key
-  nama String
-  desc String
-  path String
+  id        Int         @id @default(autoincrement())
+  userId    Int
+  user      Users       @relation(fields: [userId], references: [id]) // foreign Key
+  nama      String
+  desc      String
+  path      String
   transaksi Transaksi[]
-  review Review[]
-  cart Cart[]
-  variasi Variasi[]
+  review    Review[]
+  cart      Cart[]
+  variasi   Variasi[]
 }
 
 model Variasi {
-  id Int @id @default(autoincrement())
+  id        Int     @id @default(autoincrement())
   productId Int
-  product Product @relation(fields: [productId], references: [id])
-  nama String
-  harga Int
-  path String
-  stok Int @default(0)
-  cart Cart[]
+  product   Product @relation(fields: [productId], references: [id])
+  nama      String
+  harga     Int
+  path      String
+  stok      Int     @default(0)
+  cart      Cart[]
 }
 
 model Transaksi {
-  id Int @id @default(autoincrement())
-  userId Int
-  user Users @relation(fields: [userId], references: [id])
+  id        Int     @id @default(autoincrement())
+  userId    Int
+  user      Users   @relation(fields: [userId], references: [id])
   productId Int
-  product Product @relation(fields: [productId], references: [id])
-  status Int
+  product   Product @relation(fields: [productId], references: [id])
+  status    Int
 }
 
 model Review {
-  id Int @id @default(autoincrement())
-  userId Int
-  user Users @relation(fields: [userId], references: [id])
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  user      Users     @relation(fields: [userId], references: [id])
   productId Int
-  product Product @relation(fields: [productId], references: [id])
-  review String
-  rating Float
-  time DateTime?
+  product   Product   @relation(fields: [productId], references: [id])
+  review    String
+  rating    Float
+  time      DateTime?
 }
 
 model Cart {
-  id Int @id @default(autoincrement())
-  userId Int
-  user Users @relation(fields: [userId], references: [id])
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      Users    @relation(fields: [userId], references: [id])
   productId Int
-  product Product @relation(fields: [productId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
   variasiId Int
-  variasi Variasi @relation(fields: [variasiId], references: [id])
-  quantity Int
-  time DateTime
+  variasi   Variasi  @relation(fields: [variasiId], references: [id])
+  quantity  Int
+  time      DateTime
 }
 
 model Alamat {
-  id         Int      @id @default(autoincrement())
-  userId     Int
-  users      Users    @relation(name: "AlamatUser", fields: [userId], references: [id])
+  id     Int   @id @default(autoincrement())
+  userId Int
+  users  Users @relation(name: "AlamatUser", fields: [userId], references: [id])
 
-  kodeProv   String
-  kodeKab    String
-  kodeKec    String
-  kodeDesa   String
+  kodeProv String
+  kodeKab  String
+  kodeKec  String
+  kodeDesa String
 
-  provinsi   Provinsi   @relation(fields: [kodeProv], references: [kode])
-  kabupaten  Kabupaten  @relation(fields: [kodeProv, kodeKab], references: [kodeProv, kode])
-  kecamatan  Kecamatan  @relation(fields: [kodeProv, kodeKab, kodeKec], references: [kodeProv, kodeKab, kode])
-  desa       Desa       @relation(fields: [kodeProv, kodeKab, kodeKec, kodeDesa], references: [kodeProv, kodeKab, kodeKec, kode])
+  kodePos String
 
-  detail     String   @default("")
-  catatan    String   @default("")
-  is_toko    Int      @default(0) // 0 = alamat biasa, 1 = alamat toko
-  is_default Int      @default(0) // 0 = bukan alamat default, 1 = alamat default
+  provinsi  Provinsi  @relation(fields: [kodeProv], references: [kode])
+  kabupaten Kabupaten @relation(fields: [kodeProv, kodeKab], references: [kodeProv, kode])
+  kecamatan Kecamatan @relation(fields: [kodeProv, kodeKab, kodeKec], references: [kodeProv, kodeKab, kode])
+  desa      Desa      @relation(fields: [kodeProv, kodeKab, kodeKec, kodeDesa], references: [kodeProv, kodeKab, kodeKec, kode])
+
+  detail     String @default("")
+  catatan    String @default("")
+  is_toko    Int    @default(0) // 0 = alamat biasa, 1 = alamat toko
+  is_default Int    @default(0) // 0 = bukan alamat default, 1 = alamat default
 }
 
 model Provinsi {
-  kode       String         @id
-  nama       String
-  kabupaten  Kabupaten[]
-  alamat     Alamat[]
+  kode      String      @id
+  nama      String
+  kabupaten Kabupaten[]
+  alamat    Alamat[]
 }
 
 model Kabupaten {
-  kodeProv   String
-  kode       String
-  nama       String
+  kodeProv String
+  kode     String
+  nama     String
 
-  provinsi   Provinsi    @relation(fields: [kodeProv], references: [kode])
-  kecamatan  Kecamatan[]
-  alamat     Alamat[]
+  provinsi  Provinsi    @relation(fields: [kodeProv], references: [kode])
+  kecamatan Kecamatan[]
+  alamat    Alamat[]
 
   @@id([kodeProv, kode])
 }
 
 model Kecamatan {
-  kodeProv   String
-  kodeKab    String
-  kode       String
-  nama       String
+  kodeProv String
+  kodeKab  String
+  kode     String
+  nama     String
 
-  kabupaten  Kabupaten   @relation(fields: [kodeProv, kodeKab], references: [kodeProv, kode])
-  desa       Desa[]
-  alamat     Alamat[]
+  kabupaten Kabupaten @relation(fields: [kodeProv, kodeKab], references: [kodeProv, kode])
+  desa      Desa[]
+  alamat    Alamat[]
 
   @@id([kodeProv, kodeKab, kode])
 }
 
 model Desa {
-  kodeProv   String
-  kodeKab    String
-  kodeKec    String
-  kode       String
-  nama       String
+  kodeProv String
+  kodeKab  String
+  kodeKec  String
+  kode     String
+  nama     String
 
-  kecamatan  Kecamatan   @relation(fields: [kodeProv, kodeKab, kodeKec], references: [kodeProv, kodeKab, kode])
-  alamat     Alamat[]
+  kecamatan Kecamatan @relation(fields: [kodeProv, kodeKab, kodeKec], references: [kodeProv, kodeKab, kode])
+  alamat    Alamat[]
 
   @@id([kodeProv, kodeKab, kodeKec, kode])
 }

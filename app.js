@@ -209,6 +209,33 @@ app.get("/api/v1/desa/:kode_prov/:kode_kab/:kode_kec", async (req, res) => {
   });
 });
 
+app.get("/api/v1/alamat/:id_user", async (req, res) => {
+  const { id_user } = req.params;
+
+  console.log(id_user);
+
+  const alamat = await prisma.alamat.findMany({
+    where: {
+      userId: parseInt(id_user),
+    },
+    select: {
+      detail: true,
+      is_default: true,
+      is_toko: true,
+      kodeProv: true,
+      kodeKab: true,
+      kodeKec: true,
+      kodeDesa: true,
+      kodePos: true,
+    },
+  });
+
+  return res.status(200).send({
+    success: true,
+    data: alamat,
+  });
+});
+
 app.get("/api/v1/users", async (req, res) => {
   const users = await prisma.users.findMany({
     select: {
@@ -228,14 +255,14 @@ app.get("/api/v1/users", async (req, res) => {
 
 app.get("/api/v1/product", async (req, res) => {
   try {
-    const { total, page, orderBy, keyword } = req.query;
+    const { total, page, orderBy, keyword, idToko } = req.query;
 
     const keywordTrimmed = keyword ? keyword.trim() : undefined;
 
     let order = {};
-    if (orderBy == "harga_desc") {
+    if (orderBy === "harga_desc") {
       order = { harga: "desc" };
-    } else if (orderBy == "harga_asc") {
+    } else if (orderBy === "harga_asc") {
       order = { harga: "asc" };
     }
 
@@ -251,6 +278,7 @@ app.get("/api/v1/product", async (req, res) => {
               mode: "insensitive",
             }
           : undefined,
+        userId: idToko ? parseInt(idToko) : undefined,
       },
     });
 
@@ -285,16 +313,17 @@ app.get("/api/v1/product", async (req, res) => {
       take: totalQ,
       skip: skip,
       where: {
-        // stock: { gt: 0 },
         nama: keywordTrimmed
           ? {
               contains: keywordTrimmed,
               mode: "insensitive",
             }
           : undefined,
+        userId: idToko ? parseInt(idToko) : undefined,
       },
     });
 
+    // Urutkan jika orderBy harga diberikan
     if (orderBy === "harga_desc" || orderBy === "harga_asc") {
       result.sort((a, b) => {
         const hargaA = a.variasi[0]?.harga ?? 0;
@@ -889,14 +918,18 @@ app.post("/api/v1/transaksi", async (req, res) => {
 app.post("/api/v1/alamat", async (req, res) => {
   const {
     userId,
-    provinsi,
-    kabupaten,
-    kecamatan,
-    desa,
+    kodeProv,
+    kodeKab,
+    kodeKec,
+    kodeDesa,
     detail,
     catatan,
     kode_pos,
+    is_toko,
+    is_default,
   } = req.body;
+
+  console.log(req.body);
 
   try {
     const alamatBaru = await prisma.alamat.create({
@@ -908,6 +941,7 @@ app.post("/api/v1/alamat", async (req, res) => {
         kodeDesa,
         detail,
         catatan,
+        kodePos: kode_pos,
         is_toko,
         is_default,
       },
