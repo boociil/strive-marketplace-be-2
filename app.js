@@ -533,34 +533,34 @@ app.get("/api/v1/toko/:id", async (req, res) => {
 
     const toko = await prisma.users.findFirst({
       where: {
-        id: id,
+        id: parseInt(id),
       },
       select: {
         nama_toko: true,
         klasifikasi_toko: true,
         rating_toko: true,
-      },
-      include: {
         alamat: {
           where: {
-            is_toko: true,
+            AND: [{ is_toko: 1 }, { is_default: 1 }],
           },
           select: {
-            provinsi: true,
-            kabupaten: true,
-            kecamatan: true,
-            desa: true,
-            kode_pos: true,
-            detail: true,
+            //default alamat
+            id: true,
+            kabupaten: {
+              select: {
+                nama: true,
+              },
+            },
           },
         },
       },
     });
+    // console.log(toko);
 
     return res.status(200).send({
       success: true,
       message: "Req berhasil",
-      data: result,
+      data: toko,
     });
   } catch (error) {
     console.log(error);
