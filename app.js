@@ -219,13 +219,25 @@ app.get("/api/v1/alamat/:id_user", async (req, res) => {
       userId: parseInt(id_user),
     },
     select: {
+      id:true,
       detail: true,
       is_default: true,
+      nama: true,
+      bangunan: true,
+      notelp: true,
       is_toko: true,
-      kodeProv: true,
-      kodeKab: true,
-      kodeKec: true,
-      kodeDesa: true,
+      provinsi: {
+        select: { nama: true }
+      },
+      kabupaten: {
+        select: { nama: true }
+      },
+      kecamatan: {
+        select: { nama: true }
+      },
+      desa: {
+        select: { nama: true }
+      },
       kodePos: true,
     },
   });
@@ -927,6 +939,9 @@ app.post("/api/v1/alamat", async (req, res) => {
     kode_pos,
     is_toko,
     is_default,
+    bangunan,
+    nama,
+    notelp
   } = req.body;
 
   console.log(req.body);
@@ -941,6 +956,9 @@ app.post("/api/v1/alamat", async (req, res) => {
         kodeDesa,
         detail,
         catatan,
+        bangunan,
+        nama,
+        notelp: notelp,
         kodePos: kode_pos,
         is_toko,
         is_default,
@@ -1471,7 +1489,44 @@ app.delete("/api/v1/product/:id", async (req, res) => {
   }
 });
 
-app.delete("api/v1/review/:id", async (req, res) => {
+
+
+app.delete("api/v1/alamat/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Cek apakah review ada
+    const existingReview = await prisma.alamat.findUnique({
+      where: { id: parseInt(id) },
+    });
+
+    if (!existingReview) {
+      return res.status(404).json({
+        success: false,
+        message: "Review tidak ditemukan",
+      });
+    }
+
+    // Hapus review
+    await prisma.alamat.delete({
+      where: { id: parseInt(id) },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Alamat berhasil dihapus",
+    });
+  } catch (error) {
+    console.error("Server error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Terjadi Kesalahan",
+      data: error,
+    });
+  }
+});
+
+app.delete("/api/v1/review/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
