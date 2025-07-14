@@ -4,7 +4,7 @@ const app = express();
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
-const fsp = require("fs/promises");
+const fs = require("fs");
 // const upload = multer({ dest: 'uploads/' });
 
 const { PrismaClient } = require("@prisma/client");
@@ -31,7 +31,31 @@ const storage = multer.diskStorage({
   },
 });
 
-const uploadProduk = multer({ storage: multer.memoryStorage() });
+const storageProduk = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, "img/product/");
+  },
+  filename: function (req, file, cb) {
+    // Ambil nama produk dari form body
+    let namaProduk = req.body.nama || "produk";
+
+    // Hilangkan spasi, huruf kecil semua, buang karakter aneh
+    namaProduk = namaProduk
+      .toLowerCase()
+      .replace(/\s+/g, "_")
+      .replace(/[^a-z0-9_]/g, "");
+
+    // Ambil ekstensi asli
+    const ext = path.extname(file.originalname);
+
+    // Buat nama file akhir
+    const fileName = `${namaProduk}_${Date.now()}${ext}`;
+
+    cb(null, fileName);
+  },
+});
+
+const uploadProduk = multer({ storage: storageProduk });
 const upload = multer({ storage: storage });
 
 app.use(cors());
@@ -382,6 +406,7 @@ app.get("/api/v1/product/:id", async (req, res) => {
             nama: true,
             harga: true,
             stok: true,
+            path: true,
           },
         },
       },
@@ -1366,71 +1391,84 @@ app.post("/api/v1/pengajuan/acc", authenticateAdmin, async (req, res) => {
 });
 
 app.post("/api/v1/product", uploadProduk.any(), async (req, res) => {
-  console.log(req.body);
-  console.warn("⚠️ Menghapus id dari req.body:", req.body.id);
-
   try {
     const { nama, deskripsi, userId, kategori = 0 } = req.body;
     const parsedVariasi = JSON.parse(req.body.variasi || "[]");
-    console.log(parsedVariasi);
+    req.files.forEach((file) => {
+      console.log("FIELDNAME:", file.fieldname);
+    });
+    console.log(req.files);
 
-    // Langkah 1: simpan produk dulu tanpa gambar
+    // Langkah 1: Simpan produk dulu
     const product = await prisma.product.create({
       data: {
         nama,
         desc: deskripsi,
         userId: parseInt(userId),
         kategori: parseInt(kategori),
-        path: "", // nanti diupdate setelah upload gambar
+        path: "", // nanti diupdate setelah tahu path gambar utama
       },
     });
 
     const idProduk = product.id;
-    const folderPath = `img/produk/${idProduk}`;
-    if (!fs.existsSync(folderPath)) {
-      fs.mkdirSync(folderPath, { recursive: true });
+
+    const folderFinal = `img/product/${idProduk}`;
+    if (!fs.existsSync(folderFinal)) {
+      fs.mkdirSync(folderFinal, { recursive: true });
     }
 
-    // Simpan file utama
-    const fileUtama = req.files.find((f) => f.fieldname === "fileUtama");
-    const namaFileUtama = `utama_${Date.now()}${path.extname(
-      fileUtama.originalname
-    )}`;
-    const fullPathUtama = `${folderPath}/${namaFileUtama}`;
-    fs.writeFileSync(fullPathUtama, fileUtama.buffer);
+    let fileUtamaPath = [];
+    const variasiData = [];
+    let fileIndex = 0;
 
-    // Simpan file variasi
-    const variasiData = parsedVariasi.map((v, i) => {
-      const f = req.files.find((f) => f.fieldname === `variasi[${i}][file]`);
-      const namaFile = `variasi${i}_${Date.now()}${path.extname(
-        f.originalname
-      )}`;
-      const fullPath = `${folderPath}/${namaFile}`;
-      fs.writeFileSync(fullPath, f.buffer);
+    req.files.forEach((file) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      const finalFileName = `${fileIndex}${ext}`;
+      const finalPath = `${folderFinal}/${finalFileName}`;
 
-      return {
-        productId: idProduk,
-        nama: v.nama,
-        harga: parseInt(v.harga),
-        stok: parseInt(v.stok),
-        path: `/${fullPath}`,
-      };
+      fs.renameSync(file.path, finalPath);
+
+      if (file.fieldname === "files") {
+        fileUtamaPath.push(`/${finalPath}`);
+      } else {
+        const match = file.fieldname.match(/variasi\[(\d+)\]\[file\]/);
+        if (match) {
+          const index = parseInt(match[1]);
+          const v = parsedVariasi[index];
+          if (v) {
+            variasiData.push({
+              productId: idProduk,
+              nama: v.nama,
+              harga: parseInt(v.harga),
+              stok: parseInt(v.stok),
+              path: JSON.stringify(`/${finalPath}`),
+            });
+          }
+        }
+      }
+
+      fileIndex++;
     });
 
-    // Update produk dan insert variasi
+    console.log(fileUtamaPath);
+
+    console.log("Isi variasiData:", variasiData);
+
+    // Update produk dengan path gambar utama dan buat variasi
     const updatedProduct = await prisma.product.update({
-      where: { id: idProduk },
+      where: { id: product.id },
       data: {
-        path: `/${fullPathUtama}`,
-        variasi: { create: variasiData },
+        path: JSON.stringify(fileUtamaPath), // ← simpan array path jadi string JSON
       },
-      include: { variasi: true },
+    });
+
+    await prisma.variasi.createMany({
+      data: variasiData,
     });
 
     res.json({ success: true, data: updatedProduct });
   } catch (err) {
     console.error("Gagal:", err);
-
     res.status(500).json({
       success: false,
       message: "Gagal menambahkan produk",
