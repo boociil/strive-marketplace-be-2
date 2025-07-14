@@ -33,6 +33,7 @@ const storage = multer.diskStorage({
   },
 });
 
+const uploadProduk = multer({ storage: multer.memoryStorage() });
 const upload = multer({ storage: storage });
 
 app.use(cors());
@@ -352,6 +353,7 @@ app.get("/api/v1/alamat/:id_user", async (req, res) => {
     },
     select: {
       id: true,
+      id: true,
       detail: true,
       is_default: true,
       nama: true,
@@ -368,6 +370,7 @@ app.get("/api/v1/alamat/:id_user", async (req, res) => {
         select: { nama: true },
       },
       desa: {
+        select: { nama: true },
         select: { nama: true },
       },
       kodePos: true,
@@ -441,6 +444,7 @@ app.get("/api/v1/product", async (req, res) => {
         id: true,
         nama: true,
         path: true,
+        kategori: true,
         user: {
           select: {
             nama_toko: true,
@@ -450,8 +454,9 @@ app.get("/api/v1/product", async (req, res) => {
         variasi: {
           select: {
             harga: true,
+            stok: true,
           },
-          take: 1,
+          // take: 1,
         },
       },
       take: totalQ,
@@ -677,34 +682,34 @@ app.get("/api/v1/toko/:id", async (req, res) => {
 
     const toko = await prisma.users.findFirst({
       where: {
-        id: id,
+        id: parseInt(id),
       },
       select: {
         nama_toko: true,
         klasifikasi_toko: true,
         rating_toko: true,
-      },
-      include: {
         alamat: {
           where: {
-            is_toko: true,
+            AND: [{ is_toko: 1 }, { is_default: 1 }],
           },
           select: {
-            provinsi: true,
-            kabupaten: true,
-            kecamatan: true,
-            desa: true,
-            kode_pos: true,
-            detail: true,
+            //default alamat
+            id: true,
+            kabupaten: {
+              select: {
+                nama: true,
+              },
+            },
           },
         },
       },
     });
+    // console.log(toko);
 
     return res.status(200).send({
       success: true,
       message: "Req berhasil",
-      data: result,
+      data: toko,
     });
   } catch (error) {
     console.log(error);
@@ -1502,58 +1507,79 @@ app.post("/api/v1/pengajuan/acc", authenticateAdmin, async (req, res) => {
   }
 });
 
-app.post("/api/v1/product", async (req, res) => {
+app.post("/api/v1/product", uploadProduk.any(), async (req, res) => {
+  console.log(req.body);
+  console.warn("⚠️ Menghapus id dari req.body:", req.body.id);
+
   try {
-    const { nama, harga, deskripsi, stock, userId } = req.body;
+    const { nama, deskripsi, userId, kategori = 0 } = req.body;
+    const parsedVariasi = JSON.parse(req.body.variasi || "[]");
+    console.log(parsedVariasi);
 
-    // Validasi input
-    if (!nama || !harga || !deskripsi || !stock || !userId) {
-      return res.status(400).json({
-        success: false,
-        message: "Data tidak lengkap",
-      });
-    }
-
-    // Cek apakah user ada
-    const user = await prisma.users.findUnique({
-      where: { id: parseInt(userId) },
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User tidak ditemukan",
-      });
-    }
-
-    // Buat produk baru
-    const newProduct = await prisma.product.create({
+    // Langkah 1: simpan produk dulu tanpa gambar
+    const product = await prisma.product.create({
       data: {
         nama,
-        harga: parseFloat(harga),
         desc: deskripsi,
-        stock: parseInt(stock),
         userId: parseInt(userId),
-        path: "/path/test",
+        kategori: parseInt(kategori),
+        path: "", // nanti diupdate setelah upload gambar
       },
     });
 
-    return res.status(201).json({
-      success: true,
-      message: "Produk berhasil ditambahkan",
-      data: newProduct,
+    const idProduk = product.id;
+    const folderPath = `img/produk/${idProduk}`;
+    if (!fs.existsSync(folderPath)) {
+      fs.mkdirSync(folderPath, { recursive: true });
+    }
+
+    // Simpan file utama
+    const fileUtama = req.files.find((f) => f.fieldname === "fileUtama");
+    const namaFileUtama = `utama_${Date.now()}${path.extname(
+      fileUtama.originalname
+    )}`;
+    const fullPathUtama = `${folderPath}/${namaFileUtama}`;
+    fs.writeFileSync(fullPathUtama, fileUtama.buffer);
+
+    // Simpan file variasi
+    const variasiData = parsedVariasi.map((v, i) => {
+      const f = req.files.find((f) => f.fieldname === `variasi[${i}][file]`);
+      const namaFile = `variasi${i}_${Date.now()}${path.extname(
+        f.originalname
+      )}`;
+      const fullPath = `${folderPath}/${namaFile}`;
+      fs.writeFileSync(fullPath, f.buffer);
+
+      return {
+        productId: idProduk,
+        nama: v.nama,
+        harga: parseInt(v.harga),
+        stok: parseInt(v.stok),
+        path: `/${fullPath}`,
+      };
     });
-  } catch (error) {
-    console.error("Server error:", error);
-    return res.status(500).json({
+
+    // Update produk dan insert variasi
+    const updatedProduct = await prisma.product.update({
+      where: { id: idProduk },
+      data: {
+        path: `/${fullPathUtama}`,
+        variasi: { create: variasiData },
+      },
+      include: { variasi: true },
+    });
+
+    res.json({ success: true, data: updatedProduct });
+  } catch (err) {
+    console.error("Gagal:", err);
+
+    res.status(500).json({
       success: false,
-      message: "Terjadi Kesalahan",
-      data: error,
+      message: "Gagal menambahkan produk",
+      error: err.message,
     });
   }
 });
-
-// END
 
 // DELETE API
 app.delete("/api/v1/cart", async (req, res) => {
