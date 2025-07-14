@@ -5,6 +5,8 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const fsp = require("fs/promises");
+const axios = require("axios");
+
 // const upload = multer({ dest: 'uploads/' });
 
 const { PrismaClient } = require("@prisma/client");
@@ -70,6 +72,136 @@ function authenticateAdmin(req, res, next) {
 
 // GET API
 
+// RAJA ONGKIR
+
+app.get("/rajaongkir/ongkir", async (req, res) => {
+  const { province, city } = req.query;
+
+  if (!province || !city) {
+    return res
+      .status(400)
+      .json({ error: "province_id dan city_id wajib diisi" });
+  }
+
+  const headers = { key: process.env.ONGKIR_API_KEY };
+
+  try {
+    // 1. Get Provinsi
+    const provResponse = await axios.get(
+      `https://rajaongkir.komerce.id/api/v1/destination/province`,
+      { headers }
+    );
+
+    console.log(provResponse.data);
+
+    const provinsi = provResponse.data.find((p) => p.id == province_id);
+
+    // 2. Get Kota
+    // const cityResponse = await axios.get(
+    //   `https://rajaongkir.komerce.id/api/v1/destination/city/${province_id}`,
+    //   { headers }
+    // );
+    // const kota = cityResponse.data.find(k => k.id == city_id);
+
+    // // 3. Get Kecamatan
+    // const districtResponse = await axios.get(
+    //   `https://rajaongkir.komerce.id/api/v1/destination/district/${city_id}`,
+    //   { headers }
+    // );
+    // const kecamatan = districtResponse.data;
+
+    // res.json({
+    //   provinsi,
+    //   kota,
+    //   kecamatan,
+    // });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Gagal mengambil data wilayah" });
+  }
+});
+
+app.get("/rajaongkir/province", async (req, res) => {
+  try {
+    const response = await axios.get(
+      `https://rajaongkir.komerce.id/api/v1/destination/province`,
+      {
+        headers: { key: process.env.ONGKIR_API_KEY },
+      }
+    );
+    console.log(response.data);
+
+    // res.json(response.data.rajaongkir.results);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Gagal ambil provinsi" });
+  }
+});
+
+// ➤ Ambil kota berdasarkan ID provinsi
+app.get("/rajaongkir/city", async (req, res) => {
+  const { province_id } = req.query;
+  try {
+    const response = await axios.get(
+      `https://rajaongkir.komerce.id/api/v1/destination/city/${province_id}`,
+      {
+        headers: { key: process.env.ONGKIR_API_KEY },
+        // params: { province: province_id },
+      }
+    );
+    console.log(response.data);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Gagal ambil kota" });
+  }
+});
+
+app.get("/rajaongkir/district", async (req, res) => {
+  const { city_id } = req.query;
+  console.log(city_id);
+
+  try {
+    const response = await axios.get(
+      `https://rajaongkir.komerce.id/api/v1/destination/district/${city_id}`,
+      {
+        headers: { key: process.env.ONGKIR_API_KEY },
+        // params: { province: province_id },
+      }
+    );
+    console.log(response.data);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Gagal ambil kota" });
+  }
+});
+
+// ➤ Cek ongkir (POST)
+app.post("/rajaongkir/cost", async (req, res) => {
+  const { origin, destination, weight, courier } = req.body;
+  try {
+    const response = await axios.post(
+      `${BASE_URL}/cost`,
+      new URLSearchParams({
+        origin,
+        destination,
+        weight,
+        courier,
+      }),
+      {
+        headers: {
+          key: API_KEY,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      }
+    );
+    res.json(response.data.rajaongkir.results);
+  } catch (error) {
+    console.error(error.response?.data || error.message);
+    res.status(500).json({ error: "Gagal cek ongkir" });
+  }
+});
+
+//
 app.get("/", (req, res) => {
   res.send("API Connected");
 });
@@ -219,7 +351,7 @@ app.get("/api/v1/alamat/:id_user", async (req, res) => {
       userId: parseInt(id_user),
     },
     select: {
-      id:true,
+      id: true,
       detail: true,
       is_default: true,
       nama: true,
@@ -227,16 +359,16 @@ app.get("/api/v1/alamat/:id_user", async (req, res) => {
       notelp: true,
       is_toko: true,
       provinsi: {
-        select: { nama: true }
+        select: { nama: true },
       },
       kabupaten: {
-        select: { nama: true }
+        select: { nama: true },
       },
       kecamatan: {
-        select: { nama: true }
+        select: { nama: true },
       },
       desa: {
-        select: { nama: true }
+        select: { nama: true },
       },
       kodePos: true,
     },
@@ -685,8 +817,9 @@ app.get("/api/v1/pengajuan", authenticateAdmin, async (req, res) => {
 app.get("/api/v1/transaksi", async (req, res) => {
   try {
     const { userId, productId, transaksiId } = req.query;
+    console.log(req.query);
 
-    if (!userId || (!productId && !transaksiId)) {
+    if (!transaksiId || !userId) {
       return res.status(400).json({
         success: false,
         message: "Parameter tidak lengkap",
@@ -698,13 +831,6 @@ app.get("/api/v1/transaksi", async (req, res) => {
       const transaksi = await prisma.transaksi.findUnique({
         where: { id: parseInt(transaksiId) },
         include: {
-          product: {
-            select: {
-              nama: true,
-              harga: true,
-              stock: true,
-            },
-          },
           user: {
             select: {
               firstName: true,
@@ -712,7 +838,20 @@ app.get("/api/v1/transaksi", async (req, res) => {
               email: true,
             },
           },
+          toko: {
+            select: {
+              rek_toko: true,
+              an_rek: true,
+              nama_toko: true,
+              telp: true,
+            },
+          },
         },
+      });
+      return res.status(200).json({
+        success: true,
+        message: "Req Berhasil",
+        data: transaksi,
       });
     } else if (productId && transaksiId) {
       // Jika hanya productId diberikan, ambil semua transaksi untuk produk tersebut
@@ -738,13 +877,12 @@ app.get("/api/v1/transaksi", async (req, res) => {
           },
         },
       });
+      return res.status(200).json({
+        success: true,
+        message: "Req Berhasil",
+        data: transaksi,
+      });
     }
-
-    return res.status(200).json({
-      success: true,
-      message: "Req Berhasil",
-      data: transaksi,
-    });
   } catch (error) {
     console.error("Server error:", error);
     return res.status(500).json({
@@ -755,9 +893,10 @@ app.get("/api/v1/transaksi", async (req, res) => {
   }
 });
 
-app.get("/api/v1/review", async (req, res) => {
+app.get("/api/v1/review/:productId", async (req, res) => {
   try {
-    const { productId } = req.query;
+    const { productId } = req.params;
+    console.log(req.params);
 
     if (!productId) {
       return res.status(400).json({
@@ -773,6 +912,7 @@ app.get("/api/v1/review", async (req, res) => {
           select: {
             firstName: true,
             lastName: true,
+            path_file: true,
           },
         },
       },
@@ -941,7 +1081,7 @@ app.post("/api/v1/alamat", async (req, res) => {
     is_default,
     bangunan,
     nama,
-    notelp
+    notelp,
   } = req.body;
 
   console.log(req.body);
@@ -1489,11 +1629,11 @@ app.delete("/api/v1/product/:id", async (req, res) => {
   }
 });
 
-
-
-app.delete("api/v1/alamat/:id", async (req, res) => {
+app.delete("/api/v1/alamat/:id", async (req, res) => {
   try {
     const { id } = req.params;
+
+    console.log("Alamat dihapus : ", id);
 
     // Cek apakah review ada
     const existingReview = await prisma.alamat.findUnique({
