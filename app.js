@@ -1022,18 +1022,18 @@ app.post("/api/v1/register", async (req, res) => {
 
 app.post("/api/v1/transaksi", async (req, res) => {
   try {
-    const { userId, productId, status } = req.body;
+    const { userId, tokoId, harga, listIdProduk, status, time } = req.body;
     // Cek apakah user ada
-    const user = await prisma.users.findUnique({
-      where: { id: parseInt(userId) },
-    });
+    // const user = await prisma.users.findUnique({
+    //   where: { id: parseInt(userId) },
+    // });
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User tidak ditemukan",
-      });
-    }
+    // if (!user) {
+    //   return res.status(404).json({
+    //     success: false,
+    //     message: "User tidak ditemukan",
+    //   });
+    // }
 
     // Cek apakah produk ada
     const product = await prisma.product.findUnique({
