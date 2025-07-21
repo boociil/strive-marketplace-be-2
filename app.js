@@ -16,6 +16,7 @@ const port = 3001;
 // agar API bisa dia kses
 const cors = require("cors");
 const path = require("path");
+const { log } = require("console");
 
 const secretKey = "hkalshd9832yhui234hg234gjksdfsdnbnsvoisdsii";
 
@@ -1770,34 +1771,35 @@ app.patch("/api/v1/product/:id", async (req, res) => {
     const { id } = req.params;
     const { nama, harga, deskripsi, stock } = req.body;
 
-    // Cek apakah produk ada
-    const existingProduct = await prisma.product.findUnique({
-      where: { id: parseInt(id) },
-    });
+    console.log("Update product:", req.body);
+    // // Cek apakah produk ada
+    // const existingProduct = await prisma.product.findUnique({
+    //   where: { id: parseInt(id) },
+    // });
 
-    if (!existingProduct) {
-      return res.status(404).json({
-        success: false,
-        message: "Produk tidak ditemukan",
-      });
-    }
+    // if (!existingProduct) {
+    //   return res.status(404).json({
+    //     success: false,
+    //     message: "Produk tidak ditemukan",
+    //   });
+    // }
 
-    // Update produk
-    const updatedProduct = await prisma.product.update({
-      where: { id: parseInt(id) },
-      data: {
-        nama,
-        harga: parseFloat(harga),
-        desc: deskripsi,
-        stock: parseInt(stock),
-      },
-    });
+    // // Update produk
+    // const updatedProduct = await prisma.product.update({
+    //   where: { id: parseInt(id) },
+    //   data: {
+    //     nama,
+    //     harga: parseFloat(harga),
+    //     desc: deskripsi,
+    //     stock: parseInt(stock),
+    //   },
+    // });
 
-    return res.status(200).json({
-      success: true,
-      message: "Produk berhasil diupdate",
-      data: updatedProduct,
-    });
+    // return res.status(200).json({
+    //   success: true,
+    //   message: "Produk berhasil diupdate",
+    //   data: updatedProduct,
+    // });
   } catch (error) {
     console.error("Server error:", error);
     return res.status(500).json({
