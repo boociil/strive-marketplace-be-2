@@ -1533,6 +1533,11 @@ app.post("/api/v1/pengajuan/acc", authenticateAdmin, async (req, res) => {
 
 app.post("/api/v1/product", uploadProduk.any(), async (req, res) => {
   try {
+    console.log("tambah produk");
+
+    console.log(req.body);
+    console.log(req.files);
+
     const { nama, deskripsi, userId, kategori = 0 } = req.body;
     const parsedVariasi = JSON.parse(req.body.variasi || "[]");
     req.files.forEach((file) => {
@@ -1766,46 +1771,128 @@ app.delete("/api/v1/review/:id", async (req, res) => {
 
 // PATCH API
 
-app.patch("/api/v1/product/:id", async (req, res) => {
+app.patch("/api/v1/product/:id", uploadProduk.any(), async (req, res) => {
   try {
     const { id } = req.params;
-    const { nama, harga, deskripsi, stock } = req.body;
+    const { nama, deskripsi, userId, kategori = 0 } = req.body;
+    // console.log(req.body.variasi);
+    
+    console.log("Update produk dengan ID:", id);
+    
 
-    console.log("Update product:", req.body);
-    // // Cek apakah produk ada
-    // const existingProduct = await prisma.product.findUnique({
-    //   where: { id: parseInt(id) },
-    // });
+    const parsedVariasi = JSON.parse(req.body.variasi || "[]");
 
-    // if (!existingProduct) {
-    //   return res.status(404).json({
-    //     success: false,
-    //     message: "Produk tidak ditemukan",
-    //   });
-    // }
+    const existingProduct = await prisma.product.findUnique({
+      where: { id: parseInt(id) },
+    });
 
-    // // Update produk
-    // const updatedProduct = await prisma.product.update({
-    //   where: { id: parseInt(id) },
-    //   data: {
-    //     nama,
-    //     harga: parseFloat(harga),
-    //     desc: deskripsi,
-    //     stock: parseInt(stock),
-    //   },
-    // });
+    if (!existingProduct) {
+      return res.status(404).json({
+        success: false,
+        message: "Produk tidak ditemukan",
+      });
+    }
 
-    // return res.status(200).json({
-    //   success: true,
-    //   message: "Produk berhasil diupdate",
-    //   data: updatedProduct,
-    // });
+    // Ambil path media lama
+    let fileUtamaPath = [];
+    const fileUtamaBaru =
+      req.files?.filter((f) => f.fieldname === "files") || [];
+
+    // Jika ada file utama baru, hapus semua file lama dari folder & reset path
+    if (fileUtamaBaru.length > 0) {
+      try {
+        // Ambil path lama
+        const pathLama = JSON.parse(existingProduct.path);
+
+        // Hapus semua file lama
+        pathLama.forEach((p) => {
+          const fullPath = path.join(__dirname, p); // Path absolut
+          if (fs.existsSync(fullPath)) {
+            fs.unlinkSync(fullPath);
+          }
+        });
+
+        fileUtamaPath = []; // Reset path untuk diisi ulang
+      } catch (e) {
+        console.error("Gagal parsing atau hapus path lama:", e);
+      }
+    }
+
+    const folderFinal = `img/product/${id}`;
+    if (!fs.existsSync(folderFinal)) {
+      fs.mkdirSync(folderFinal, { recursive: true });
+    }
+
+    const variasiData = [];
+    let fileIndex = 0;
+
+    // Simpan file variasi terlebih dulu
+    const fileMap = {};
+    req.files?.forEach((file) => {
+      const match = file.fieldname.match(/variasi\[(\d+)\]\[file\]/);
+      const ext = path.extname(file.originalname).toLowerCase();
+      const finalFileName = `${fileIndex}${ext}`;
+      const finalPath = `${folderFinal}/${finalFileName}`;
+
+      fs.renameSync(file.path, finalPath);
+      fileIndex++;
+
+      if (file.fieldname === "files") {
+        fileUtamaPath.push(`/${finalPath}`);
+      } else if (match) {
+        const index = parseInt(match[1]);
+        fileMap[index] = `/${finalPath}`;
+      }
+    });
+
+    // Proses semua variasi (terlepas dari ada/tidaknya file)
+    parsedVariasi.forEach((v, index) => {
+      variasiData.push({
+        productId: parseInt(id),
+        nama: v.nama,
+        harga: parseInt(v.harga),
+        stok: parseInt(v.stok),
+        path: JSON.stringify(fileMap[index] || null), // bisa null jika tidak ada file
+      });
+    });
+    console.log("varasi baru : ", variasiData);
+
+    // Update produk utama
+    const updatedProduct = await prisma.product.update({
+      where: { id: parseInt(id) },
+      data: {
+        nama,
+        desc: deskripsi,
+        userId: parseInt(userId),
+        kategori: parseInt(kategori),
+        path: JSON.stringify(fileUtamaPath),
+      },
+    });
+
+    // Jika variasiData ada (berarti variasi dikirim ulang), hapus dan buat ulang
+    if (variasiData.length > 0) {
+      console.log("update variasi");
+
+      await prisma.variasi.deleteMany({
+        where: { productId: parseInt(id) },
+      });
+
+      await prisma.variasi.createMany({
+        data: variasiData,
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Produk berhasil diperbarui",
+      data: updatedProduct,
+    });
   } catch (error) {
     console.error("Server error:", error);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      message: "Terjadi Kesalahan",
-      data: error,
+      message: "Terjadi kesalahan saat update produk",
+      error: error.message,
     });
   }
 });
