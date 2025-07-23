@@ -4,12 +4,13 @@ const app = express();
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
-const fsp = require("fs/promises");
-const axios = require("axios");
-
+const fs = require("fs");
 // const upload = multer({ dest: 'uploads/' });
+const authUser = require("./AuthUser");
 
 const { PrismaClient } = require("@prisma/client");
+
+
 
 const prisma = new PrismaClient();
 
@@ -17,6 +18,11 @@ const port = 3001;
 
 // agar API bisa dia kses
 const cors = require("cors");
+// const cors = require('cors');
+app.use(cors({
+  origin: 'http://localhost:5173', // hanya FE kamu yang boleh akses
+}));
+
 const path = require("path");
 
 const secretKey = "hkalshd9832yhui234hg234gjksdfsdnbnsvoisdsii";
@@ -33,7 +39,31 @@ const storage = multer.diskStorage({
   },
 });
 
-const uploadProduk = multer({ storage: multer.memoryStorage() });
+const storageProduk = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, "img/product/");
+  },
+  filename: function (req, file, cb) {
+    // Ambil nama produk dari form body
+    let namaProduk = req.body.nama || "produk";
+
+    // Hilangkan spasi, huruf kecil semua, buang karakter aneh
+    namaProduk = namaProduk
+      .toLowerCase()
+      .replace(/\s+/g, "_")
+      .replace(/[^a-z0-9_]/g, "");
+
+    // Ambil ekstensi asli
+    const ext = path.extname(file.originalname);
+
+    // Buat nama file akhir
+    const fileName = `${namaProduk}_${Date.now()}${ext}`;
+
+    cb(null, fileName);
+  },
+});
+
+const uploadProduk = multer({ storage: storageProduk });
 const upload = multer({ storage: storage });
 
 app.use(cors());
@@ -516,6 +546,7 @@ app.get("/api/v1/product/:id", async (req, res) => {
             nama: true,
             harga: true,
             stok: true,
+            path: true,
           },
         },
       },
@@ -720,7 +751,60 @@ app.get("/api/v1/toko/:id", async (req, res) => {
   }
 });
 
-app.get("/api/v1/cart", async (req, res) => {
+app.get("/api/v1/top_toko", async (req, res) => {
+  try {
+    // const { userId } = req.query;
+
+    // console.log(req.query);
+
+    const topToko = await prisma.users.findMany({
+      select : {
+        id: true,
+        nama_toko: true,
+        rating_toko: true,
+        klasifikasi_toko: true,
+        path_file: true,
+        alamat: {
+          where: {
+            is_toko: 1,
+          },
+          select: {
+            id: true,
+            kabupaten: {
+              select: {
+                nama: true,
+              },
+            },
+          },
+        },
+      },
+      where: {
+        buka_toko: 1,
+      },
+      take: 2,
+      orderBy: {
+        rating_toko: "asc",
+      },
+    });
+    // console.log(allUserCart);
+
+    return res.status(200).send({
+      success: true,
+      message: "Req Berhasil",
+      data: topToko,
+    });
+  } catch (error) {
+    console.log(error);
+    
+    return res.status(500).json({
+      success: false,
+      message: "Terjadi Kesalahan",
+      error: error,
+    });
+  }
+});
+
+app.get("/api/v1/cart", authUser, async (req, res) => {
   try {
     const { userId } = req.query;
 
@@ -740,6 +824,7 @@ app.get("/api/v1/cart", async (req, res) => {
             path: true,
             user: {
               select: {
+                id: true,
                 nama_toko: true,
                 rating_toko: true,
                 klasifikasi_toko: true,
@@ -821,21 +906,16 @@ app.get("/api/v1/pengajuan", authenticateAdmin, async (req, res) => {
 
 app.get("/api/v1/transaksi", async (req, res) => {
   try {
-    const { userId, productId, transaksiId } = req.query;
+    const { tokoId } = req.query;
     console.log(req.query);
 
-    if (!transaksiId || !userId) {
-      return res.status(400).json({
-        success: false,
-        message: "Parameter tidak lengkap",
-      });
-    }
-
-    if (transaksiId) {
-      // Jika transaksiId diberikan, ambil transaksi tersebut
-      const transaksi = await prisma.transaksi.findUnique({
-        where: { id: parseInt(transaksiId) },
-        include: {
+    if (tokoId) {
+      // Jika tokoId diberikan, ambil semua transaksi untuk toko tersebut
+      const transaksi = await prisma.transaksi.findMany({
+        where: { tokoId: parseInt(tokoId) },
+        select: {
+          id: true,
+          time: true,
           user: {
             select: {
               firstName: true,
@@ -843,6 +923,9 @@ app.get("/api/v1/transaksi", async (req, res) => {
               email: true,
             },
           },
+          harga : true,
+          status: true,
+          listIdProduk: true,
           toko: {
             select: {
               rek_toko: true,
@@ -1023,44 +1106,26 @@ app.post("/api/v1/register", async (req, res) => {
 app.post("/api/v1/transaksi", async (req, res) => {
   try {
     const { userId, tokoId, harga, listIdProduk, status, time } = req.body;
-    // Cek apakah user ada
-    // const user = await prisma.users.findUnique({
-    //   where: { id: parseInt(userId) },
-    // });
 
-    // if (!user) {
-    //   return res.status(404).json({
-    //     success: false,
-    //     message: "User tidak ditemukan",
-    //   });
-    // }
-
-    // Cek apakah produk ada
-    const product = await prisma.product.findUnique({
-      where: { id: parseInt(productId) },
-    });
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Produk tidak ditemukan",
-      });
-    }
+    console.log(req.body);
+    
 
     // Buat transaksi baru
     const transaksi = await prisma.transaksi.create({
       data: {
         userId: parseInt(userId),
-        productId: parseInt(productId),
-        status: status,
-        time: new Date(),
+        status : status,
+        tokoId : tokoId,
+        harga : harga,
+        time : time,
+        listIdProduk : listIdProduk,
       },
     });
 
     return res.status(201).json({
       success: true,
       message: "Transaksi berhasil dibuat",
-      data: transaksi,
+      data: transaksi.id,
     });
   } catch (error) {
     console.error("Server error:", error);
@@ -1289,6 +1354,44 @@ app.post("/api/v1/login", async (req, res) => {
   }
 });
 
+app.post("/api/v1/acc_transaksi", async (req, res) => {
+  try {
+    const { transaksiId, no_resi } = req.body; 
+    console.log(req.body);  
+    // Cek apakah transaksi ada
+    const transaksi = await prisma.transaksi.findUnique({
+      where: { id: parseInt(transaksiId) },
+    });
+
+    if (!transaksi) {
+      return res.status(404).json({
+        success: false,
+        message: "Transaksi tidak ditemukan",
+      });
+    }
+    // Update status transaksi
+    const updatedTransaksi = await prisma.transaksi.update({
+      where: { id: parseInt(transaksiId) },
+      data: { 
+        status: 1,
+        no_resi: no_resi,
+      },
+    }); 
+    return res.status(200).json({
+      success: true,
+      message: "Status transaksi berhasil diupdate",
+      data: updatedTransaksi,
+    });
+  } catch (error) {
+    console.error("Server error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Terjadi Kesalahan",
+      data: error,
+    });
+  }
+});
+
 app.post("/api/v1/pengajuan", upload.single("ktp"), async (req, res) => {
   try {
     const {
@@ -1508,71 +1611,84 @@ app.post("/api/v1/pengajuan/acc", authenticateAdmin, async (req, res) => {
 });
 
 app.post("/api/v1/product", uploadProduk.any(), async (req, res) => {
-  console.log(req.body);
-  console.warn("⚠️ Menghapus id dari req.body:", req.body.id);
-
   try {
     const { nama, deskripsi, userId, kategori = 0 } = req.body;
     const parsedVariasi = JSON.parse(req.body.variasi || "[]");
-    console.log(parsedVariasi);
+    req.files.forEach((file) => {
+      console.log("FIELDNAME:", file.fieldname);
+    });
+    console.log(req.files);
 
-    // Langkah 1: simpan produk dulu tanpa gambar
+    // Langkah 1: Simpan produk dulu
     const product = await prisma.product.create({
       data: {
         nama,
         desc: deskripsi,
         userId: parseInt(userId),
         kategori: parseInt(kategori),
-        path: "", // nanti diupdate setelah upload gambar
+        path: "", // nanti diupdate setelah tahu path gambar utama
       },
     });
 
     const idProduk = product.id;
-    const folderPath = `img/produk/${idProduk}`;
-    if (!fs.existsSync(folderPath)) {
-      fs.mkdirSync(folderPath, { recursive: true });
+
+    const folderFinal = `img/product/${idProduk}`;
+    if (!fs.existsSync(folderFinal)) {
+      fs.mkdirSync(folderFinal, { recursive: true });
     }
 
-    // Simpan file utama
-    const fileUtama = req.files.find((f) => f.fieldname === "fileUtama");
-    const namaFileUtama = `utama_${Date.now()}${path.extname(
-      fileUtama.originalname
-    )}`;
-    const fullPathUtama = `${folderPath}/${namaFileUtama}`;
-    fs.writeFileSync(fullPathUtama, fileUtama.buffer);
+    let fileUtamaPath = [];
+    const variasiData = [];
+    let fileIndex = 0;
 
-    // Simpan file variasi
-    const variasiData = parsedVariasi.map((v, i) => {
-      const f = req.files.find((f) => f.fieldname === `variasi[${i}][file]`);
-      const namaFile = `variasi${i}_${Date.now()}${path.extname(
-        f.originalname
-      )}`;
-      const fullPath = `${folderPath}/${namaFile}`;
-      fs.writeFileSync(fullPath, f.buffer);
+    req.files.forEach((file) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      const finalFileName = `${fileIndex}${ext}`;
+      const finalPath = `${folderFinal}/${finalFileName}`;
 
-      return {
-        productId: idProduk,
-        nama: v.nama,
-        harga: parseInt(v.harga),
-        stok: parseInt(v.stok),
-        path: `/${fullPath}`,
-      };
+      fs.renameSync(file.path, finalPath);
+
+      if (file.fieldname === "files") {
+        fileUtamaPath.push(`/${finalPath}`);
+      } else {
+        const match = file.fieldname.match(/variasi\[(\d+)\]\[file\]/);
+        if (match) {
+          const index = parseInt(match[1]);
+          const v = parsedVariasi[index];
+          if (v) {
+            variasiData.push({
+              productId: idProduk,
+              nama: v.nama,
+              harga: parseInt(v.harga),
+              stok: parseInt(v.stok),
+              path: JSON.stringify(`/${finalPath}`),
+            });
+          }
+        }
+      }
+
+      fileIndex++;
     });
 
-    // Update produk dan insert variasi
+    console.log(fileUtamaPath);
+
+    console.log("Isi variasiData:", variasiData);
+
+    // Update produk dengan path gambar utama dan buat variasi
     const updatedProduct = await prisma.product.update({
-      where: { id: idProduk },
+      where: { id: product.id },
       data: {
-        path: `/${fullPathUtama}`,
-        variasi: { create: variasiData },
+        path: JSON.stringify(fileUtamaPath), // ← simpan array path jadi string JSON
       },
-      include: { variasi: true },
+    });
+
+    await prisma.variasi.createMany({
+      data: variasiData,
     });
 
     res.json({ success: true, data: updatedProduct });
   } catch (err) {
     console.error("Gagal:", err);
-
     res.status(500).json({
       success: false,
       message: "Gagal menambahkan produk",
