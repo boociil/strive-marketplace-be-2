@@ -6,8 +6,11 @@ const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const fs = require("fs");
 // const upload = multer({ dest: 'uploads/' });
+const authUser = require("./AuthUser");
 
 const { PrismaClient } = require("@prisma/client");
+
+
 
 const prisma = new PrismaClient();
 
@@ -15,6 +18,11 @@ const port = 3001;
 
 // agar API bisa dia kses
 const cors = require("cors");
+// const cors = require('cors');
+app.use(cors({
+  origin: 'http://localhost:5173', // hanya FE kamu yang boleh akses
+}));
+
 const path = require("path");
 const { log } = require("console");
 
@@ -744,7 +752,60 @@ app.get("/api/v1/toko/:id", async (req, res) => {
   }
 });
 
-app.get("/api/v1/cart", async (req, res) => {
+app.get("/api/v1/top_toko", async (req, res) => {
+  try {
+    // const { userId } = req.query;
+
+    // console.log(req.query);
+
+    const topToko = await prisma.users.findMany({
+      select : {
+        id: true,
+        nama_toko: true,
+        rating_toko: true,
+        klasifikasi_toko: true,
+        path_file: true,
+        alamat: {
+          where: {
+            is_toko: 1,
+          },
+          select: {
+            id: true,
+            kabupaten: {
+              select: {
+                nama: true,
+              },
+            },
+          },
+        },
+      },
+      where: {
+        buka_toko: 1,
+      },
+      take: 2,
+      orderBy: {
+        rating_toko: "asc",
+      },
+    });
+    // console.log(allUserCart);
+
+    return res.status(200).send({
+      success: true,
+      message: "Req Berhasil",
+      data: topToko,
+    });
+  } catch (error) {
+    console.log(error);
+    
+    return res.status(500).json({
+      success: false,
+      message: "Terjadi Kesalahan",
+      error: error,
+    });
+  }
+});
+
+app.get("/api/v1/cart", authUser, async (req, res) => {
   try {
     const { userId } = req.query;
 
@@ -764,6 +825,7 @@ app.get("/api/v1/cart", async (req, res) => {
             path: true,
             user: {
               select: {
+                id: true,
                 nama_toko: true,
                 rating_toko: true,
                 klasifikasi_toko: true,
@@ -845,21 +907,16 @@ app.get("/api/v1/pengajuan", authenticateAdmin, async (req, res) => {
 
 app.get("/api/v1/transaksi", async (req, res) => {
   try {
-    const { userId, productId, transaksiId } = req.query;
+    const { tokoId } = req.query;
     console.log(req.query);
 
-    if (!transaksiId || !userId) {
-      return res.status(400).json({
-        success: false,
-        message: "Parameter tidak lengkap",
-      });
-    }
-
-    if (transaksiId) {
-      // Jika transaksiId diberikan, ambil transaksi tersebut
-      const transaksi = await prisma.transaksi.findUnique({
-        where: { id: parseInt(transaksiId) },
-        include: {
+    if (tokoId) {
+      // Jika tokoId diberikan, ambil semua transaksi untuk toko tersebut
+      const transaksi = await prisma.transaksi.findMany({
+        where: { tokoId: parseInt(tokoId) },
+        select: {
+          id: true,
+          time: true,
           user: {
             select: {
               firstName: true,
@@ -867,6 +924,9 @@ app.get("/api/v1/transaksi", async (req, res) => {
               email: true,
             },
           },
+          harga : true,
+          status: true,
+          listIdProduk: true,
           toko: {
             select: {
               rek_toko: true,
@@ -1046,45 +1106,27 @@ app.post("/api/v1/register", async (req, res) => {
 
 app.post("/api/v1/transaksi", async (req, res) => {
   try {
-    const { userId, productId, status } = req.body;
-    // Cek apakah user ada
-    const user = await prisma.users.findUnique({
-      where: { id: parseInt(userId) },
-    });
+    const { userId, tokoId, harga, listIdProduk, status, time } = req.body;
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User tidak ditemukan",
-      });
-    }
-
-    // Cek apakah produk ada
-    const product = await prisma.product.findUnique({
-      where: { id: parseInt(productId) },
-    });
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Produk tidak ditemukan",
-      });
-    }
+    console.log(req.body);
+    
 
     // Buat transaksi baru
     const transaksi = await prisma.transaksi.create({
       data: {
         userId: parseInt(userId),
-        productId: parseInt(productId),
-        status: status,
-        time: new Date(),
+        status : status,
+        tokoId : tokoId,
+        harga : harga,
+        time : time,
+        listIdProduk : listIdProduk,
       },
     });
 
     return res.status(201).json({
       success: true,
       message: "Transaksi berhasil dibuat",
-      data: transaksi,
+      data: transaksi.id,
     });
   } catch (error) {
     console.error("Server error:", error);
@@ -1309,6 +1351,44 @@ app.post("/api/v1/login", async (req, res) => {
       success: false,
       message: "Terjadi Kesalahan",
       error: error,
+    });
+  }
+});
+
+app.post("/api/v1/acc_transaksi", async (req, res) => {
+  try {
+    const { transaksiId, no_resi } = req.body; 
+    console.log(req.body);  
+    // Cek apakah transaksi ada
+    const transaksi = await prisma.transaksi.findUnique({
+      where: { id: parseInt(transaksiId) },
+    });
+
+    if (!transaksi) {
+      return res.status(404).json({
+        success: false,
+        message: "Transaksi tidak ditemukan",
+      });
+    }
+    // Update status transaksi
+    const updatedTransaksi = await prisma.transaksi.update({
+      where: { id: parseInt(transaksiId) },
+      data: { 
+        status: 1,
+        no_resi: no_resi,
+      },
+    }); 
+    return res.status(200).json({
+      success: true,
+      message: "Status transaksi berhasil diupdate",
+      data: updatedTransaksi,
+    });
+  } catch (error) {
+    console.error("Server error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Terjadi Kesalahan",
+      data: error,
     });
   }
 });
