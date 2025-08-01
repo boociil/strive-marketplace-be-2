@@ -10,8 +10,6 @@ const authUser = require("./AuthUser");
 
 const { PrismaClient } = require("@prisma/client");
 
-
-
 const prisma = new PrismaClient();
 
 const port = 3001;
@@ -19,9 +17,11 @@ const port = 3001;
 // agar API bisa dia kses
 const cors = require("cors");
 // const cors = require('cors');
-app.use(cors({
-  origin: 'http://localhost:5173', // hanya FE kamu yang boleh akses
-}));
+app.use(
+  cors({
+    origin: "http://localhost:5173", // hanya FE kamu yang boleh akses
+  })
+);
 
 const path = require("path");
 const { log } = require("console");
@@ -354,7 +354,6 @@ app.get("/api/v1/product", async (req, res) => {
             rating_toko: true,
           },
         },
-
       },
       take: totalQ,
       skip: skip,
@@ -399,23 +398,20 @@ app.get("/api/v1/product/:id", async (req, res) => {
 
     const product = await prisma.product.findUnique({
       where: { id: parseInt(id) },
-      include: {
+      select: {
         user: {
           select: {
             nama_toko: true,
             rating_toko: true,
             telp: true,
-          },
-        },
-        variasi: {
-          select: {
             id: true,
-            nama: true,
-            harga: true,
-            stok: true,
-            path: true,
           },
         },
+        nama: true,
+        path: true,
+        harga: true,
+        desc: true,
+        kategori: true,
       },
     });
 
@@ -592,7 +588,7 @@ app.get("/api/v1/top_toko", async (req, res) => {
     // console.log(req.query);
 
     const topToko = await prisma.users.findMany({
-      select : {
+      select: {
         id: true,
         nama_toko: true,
         rating_toko: true,
@@ -629,7 +625,7 @@ app.get("/api/v1/top_toko", async (req, res) => {
     });
   } catch (error) {
     console.log(error);
-    
+
     return res.status(500).json({
       success: false,
       message: "Terjadi Kesalahan",
@@ -637,7 +633,6 @@ app.get("/api/v1/top_toko", async (req, res) => {
     });
   }
 });
-
 
 // POST API
 
@@ -883,7 +878,6 @@ app.post("/api/v1/login", async (req, res) => {
   }
 });
 
-
 app.post("/api/v1/register", async (req, res) => {
   try {
     const { firstName, lastName, password, email } = req.body;
@@ -934,86 +928,49 @@ app.post("/api/v1/register", async (req, res) => {
   }
 });
 
-
 app.post("/api/v1/product", uploadProduk.any(), async (req, res) => {
   try {
-    console.log("tambah produk");
+    console.log("Tambah produk");
 
-    console.log(req.body);
-    console.log(req.files);
+    const { nama, deskripsi, userId, kategori = 0, harga } = req.body;
+    console.log("BODY:", req.body);
+    console.log("FILES:", req.files);
 
-    const { nama, deskripsi, userId, kategori = 0 } = req.body;
-    const parsedVariasi = JSON.parse(req.body.variasi || "[]");
-    req.files.forEach((file) => {
-      console.log("FIELDNAME:", file.fieldname);
-    });
-    console.log(req.files);
-
-    // Langkah 1: Simpan produk dulu
+    // Simpan produk dulu dengan path kosong
     const product = await prisma.product.create({
       data: {
         nama,
         desc: deskripsi,
-        userId: parseInt(userId),
         kategori: parseInt(kategori),
-        path: "", // nanti diupdate setelah tahu path gambar utama
+        harga: parseInt(harga),
+        path: "",
+        user: {
+          connect: { id: parseInt(userId) }, // ← ini kunci penting
+        },
       },
     });
 
     const idProduk = product.id;
-
     const folderFinal = `img/product/${idProduk}`;
     if (!fs.existsSync(folderFinal)) {
       fs.mkdirSync(folderFinal, { recursive: true });
     }
 
     let fileUtamaPath = [];
-    const variasiData = [];
-    let fileIndex = 0;
-
-    req.files.forEach((file) => {
+    req.files.forEach((file, i) => {
       const ext = path.extname(file.originalname).toLowerCase();
-      const finalFileName = `${fileIndex}${ext}`;
+      const finalFileName = `${i}${ext}`;
       const finalPath = `${folderFinal}/${finalFileName}`;
-
       fs.renameSync(file.path, finalPath);
-
-      if (file.fieldname === "files") {
-        fileUtamaPath.push(`/${finalPath}`);
-      } else {
-        const match = file.fieldname.match(/variasi\[(\d+)\]\[file\]/);
-        if (match) {
-          const index = parseInt(match[1]);
-          const v = parsedVariasi[index];
-          if (v) {
-            variasiData.push({
-              productId: idProduk,
-              nama: v.nama,
-              harga: parseInt(v.harga),
-              stok: parseInt(v.stok),
-              path: JSON.stringify(`/${finalPath}`),
-            });
-          }
-        }
-      }
-
-      fileIndex++;
+      fileUtamaPath.push(`/${finalPath}`);
     });
 
-    console.log(fileUtamaPath);
-
-    console.log("Isi variasiData:", variasiData);
-
-    // Update produk dengan path gambar utama dan buat variasi
+    // Update path gambar utama
     const updatedProduct = await prisma.product.update({
-      where: { id: product.id },
+      where: { id: idProduk },
       data: {
-        path: JSON.stringify(fileUtamaPath), // ← simpan array path jadi string JSON
+        path: JSON.stringify(fileUtamaPath), // array disimpan sebagai string JSON
       },
-    });
-
-    await prisma.variasi.createMany({
-      data: variasiData,
     });
 
     res.json({ success: true, data: updatedProduct });
@@ -1028,7 +985,6 @@ app.post("/api/v1/product", uploadProduk.any(), async (req, res) => {
 });
 
 // DELETE API
-
 
 app.delete("/api/v1/product/:id", async (req, res) => {
   try {
@@ -1142,13 +1098,12 @@ app.delete("/api/v1/review/:id", async (req, res) => {
 app.patch("/api/v1/product/:id", uploadProduk.any(), async (req, res) => {
   try {
     const { id } = req.params;
-    const { nama, deskripsi, userId, kategori = 0 } = req.body;
-    // console.log(req.body.variasi);
-    
-    console.log("Update produk dengan ID:", id);
-    
+    const { nama, deskripsi, userId, kategori, harga = 0 } = req.body;
 
-    const parsedVariasi = JSON.parse(req.body.variasi || "[]");
+    console.log("Update produk dengan ID:", id);
+    if (!req.files || req.files.length === 0) {
+      console.log("Tidak ada file yang diupload");
+    }
 
     const existingProduct = await prisma.product.findUnique({
       where: { id: parseInt(id) },
@@ -1161,26 +1116,22 @@ app.patch("/api/v1/product/:id", uploadProduk.any(), async (req, res) => {
       });
     }
 
-    // Ambil path media lama
+    // Handle file gambar utama
     let fileUtamaPath = [];
+
     const fileUtamaBaru =
       req.files?.filter((f) => f.fieldname === "files") || [];
 
-    // Jika ada file utama baru, hapus semua file lama dari folder & reset path
     if (fileUtamaBaru.length > 0) {
       try {
-        // Ambil path lama
-        const pathLama = JSON.parse(existingProduct.path);
-
-        // Hapus semua file lama
+        // Hapus file lama
+        const pathLama = JSON.parse(existingProduct.path || "[]");
         pathLama.forEach((p) => {
-          const fullPath = path.join(__dirname, p); // Path absolut
+          const fullPath = path.join(__dirname, p);
           if (fs.existsSync(fullPath)) {
             fs.unlinkSync(fullPath);
           }
         });
-
-        fileUtamaPath = []; // Reset path untuk diisi ulang
       } catch (e) {
         console.error("Gagal parsing atau hapus path lama:", e);
       }
@@ -1191,64 +1142,34 @@ app.patch("/api/v1/product/:id", uploadProduk.any(), async (req, res) => {
       fs.mkdirSync(folderFinal, { recursive: true });
     }
 
-    const variasiData = [];
     let fileIndex = 0;
-
-    // Simpan file variasi terlebih dulu
-    const fileMap = {};
-    req.files?.forEach((file) => {
-      const match = file.fieldname.match(/variasi\[(\d+)\]\[file\]/);
+    for (const file of fileUtamaBaru) {
       const ext = path.extname(file.originalname).toLowerCase();
       const finalFileName = `${fileIndex}${ext}`;
       const finalPath = `${folderFinal}/${finalFileName}`;
 
       fs.renameSync(file.path, finalPath);
+      fileUtamaPath.push(`/${finalPath}`);
       fileIndex++;
+    }
 
-      if (file.fieldname === "files") {
-        fileUtamaPath.push(`/${finalPath}`);
-      } else if (match) {
-        const index = parseInt(match[1]);
-        fileMap[index] = `/${finalPath}`;
-      }
-    });
+    const updateData = {
+      nama,
+      desc: deskripsi,
+      userId: parseInt(userId),
+      kategori: parseInt(kategori),
+      harga: parseInt(harga),
+    };
 
-    // Proses semua variasi (terlepas dari ada/tidaknya file)
-    parsedVariasi.forEach((v, index) => {
-      variasiData.push({
-        productId: parseInt(id),
-        nama: v.nama,
-        harga: parseInt(v.harga),
-        stok: parseInt(v.stok),
-        path: JSON.stringify(fileMap[index] || null), // bisa null jika tidak ada file
-      });
-    });
-    console.log("varasi baru : ", variasiData);
+    // Hanya tambahkan path jika ada file baru
+    if (fileUtamaPath.length > 0) {
+      updateData.path = JSON.stringify(fileUtamaPath);
+    }
 
-    // Update produk utama
     const updatedProduct = await prisma.product.update({
       where: { id: parseInt(id) },
-      data: {
-        nama,
-        desc: deskripsi,
-        userId: parseInt(userId),
-        kategori: parseInt(kategori),
-        path: JSON.stringify(fileUtamaPath),
-      },
+      data: updateData,
     });
-
-    // Jika variasiData ada (berarti variasi dikirim ulang), hapus dan buat ulang
-    if (variasiData.length > 0) {
-      console.log("update variasi");
-
-      await prisma.variasi.deleteMany({
-        where: { productId: parseInt(id) },
-      });
-
-      await prisma.variasi.createMany({
-        data: variasiData,
-      });
-    }
 
     res.json({
       success: true,
