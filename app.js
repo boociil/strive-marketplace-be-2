@@ -392,6 +392,7 @@ app.get("/api/v1/product", async (req, res) => {
   }
 });
 
+//goks
 app.get("/api/v1/product/:id", async (req, res) => {
   try {
     const { id } = req.params;
