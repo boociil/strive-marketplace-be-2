@@ -392,6 +392,57 @@ app.get("/api/v1/product", async (req, res) => {
   }
 });
 
+app.get("/api/v1/product/search", async (req, res) => {
+  try {
+    const { keyword } = req.query;
+
+    const keywordTrimmed = keyword ? keyword.trim() : undefined;
+
+    const products = await prisma.product.findMany({
+      select: {
+        id: true,
+        nama: true,
+        path: true,
+        user: {
+          select: {
+            nama_toko: true,
+            rating_toko: true,
+          },  
+        },
+      },
+      where: {
+        nama: keywordTrimmed
+          ? {
+              contains: keywordTrimmed,
+              mode: "insensitive",
+            }
+          : undefined,
+      },
+    });
+
+    if (products.length > 0) {
+      return res.status(200).send({
+        success: true,
+        message: "Req berhasil",
+        data: products,
+      });
+    } else {
+      return res.status(200).send({
+        success: false,
+        message: "Produk tidak ditemukan",
+        data: [],
+      });
+    }
+  } catch (error) {
+    console.log(error);
+    return res.status(400).send({
+      error: error,
+      success: false,
+      message: "terjadi kesalahan",
+    });
+  }
+});
+
 //goks
 app.get("/api/v1/product/:id", async (req, res) => {
   try {
