@@ -40,6 +40,7 @@ const storage = multer.diskStorage({
   },
 });
 
+// Storage config
 const storageProduk = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, "img/product/");
@@ -65,7 +66,54 @@ const storageProduk = multer.diskStorage({
 });
 
 const uploadProduk = multer({ storage: storageProduk });
-const upload = multer({ storage: storage });
+
+const storageProfileImage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, "img/profile_image/"); // Pastikan folder ini sudah ada
+  },
+  filename: function (req, file, cb) {
+    try {
+      // Ambil nama pengguna dari body (atau gunakan 'user' sebagai fallback)
+      let namaUser = req.body.nama || "user";
+
+      // Bersihkan nama (biar tidak aneh-aneh)
+      namaUser = namaUser
+        .toString()
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, "_")
+        .replace(/[^a-z0-9_]/g, "");
+
+      // Ambil ekstensi file
+      const ext = path.extname(file.originalname).toLowerCase();
+
+      // Gabungkan nama file
+      const fileName = `profile_${namaUser}_${Date.now()}${ext}`;
+
+      cb(null, fileName);
+    } catch (err) {
+      cb(err);
+    }
+  },
+});
+
+const fileFilterProfileImage = (req, file, cb) => {
+  const allowedTypes = /jpeg|jpg|png|webp/;
+  const ext = path.extname(file.originalname).toLowerCase();
+  const mime = file.mimetype;
+
+  if (allowedTypes.test(ext) && allowedTypes.test(mime)) {
+    cb(null, true);
+  } else {
+    cb(new Error("File harus berupa gambar (jpg, jpeg, png, webp)"));
+  }
+};
+
+const uploadProfileImage = multer({
+  storage: storageProfileImage,
+  fileFilter: fileFilterProfileImage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // maksimal 2MB
+});
 
 app.use(cors());
 app.use(express.urlencoded({ extended: true }));
@@ -946,12 +994,14 @@ app.post("/api/v1/product", uploadProduk.any(), async (req, res) => {
         harga: parseInt(harga),
         path: "",
         user: {
-          connect: { id: parseInt(userId) }, // ← ini kunci penting
+          connect: { id: parseInt(userId) },
         },
       },
     });
 
     const idProduk = product.id;
+    console.log(idProduk);
+    
     const folderFinal = `img/product/${idProduk}`;
     if (!fs.existsSync(folderFinal)) {
       fs.mkdirSync(folderFinal, { recursive: true });
@@ -1189,9 +1239,10 @@ app.patch("/api/v1/product/:id", uploadProduk.any(), async (req, res) => {
 
 app.patch("/api/v1/users/:id", async (req, res) => {
   try {
+    console.log(req.body);
+
     const { id } = req.params;
-    const { firstName, lastName, email, telp, nama_toko, klasifikasi_toko } =
-      req.body;
+    const { firstName, lastName, telp, nama_toko, gender } = req.body;
 
     // Cek apakah user ada
     const existingUser = await prisma.users.findUnique({
@@ -1211,10 +1262,9 @@ app.patch("/api/v1/users/:id", async (req, res) => {
       data: {
         firstName,
         lastName,
-        email,
         telp,
         nama_toko,
-        klasifikasi_toko,
+        gender,
       },
     });
 
@@ -1233,10 +1283,69 @@ app.patch("/api/v1/users/:id", async (req, res) => {
   }
 });
 
+app.patch(
+  "/api/v1/users/profile-image/:id",
+  uploadProfileImage.single("image"),
+  async (req, res) => {
+    const { id } = req.params;
+    const file = req.file;
+
+    if (!file) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Gambar tidak ditemukan" });
+    }
+
+    try {
+      // Ambil data user lama
+      const user = await prisma.users.findUnique({
+        where: { id: parseInt(id) },
+      });
+
+      // Jika user punya foto lama, hapus dari server
+      if (user?.path_file) {
+        const oldImagePath = path.join(
+          __dirname,
+          "img/profile_image", // folder tempat gambar disimpan
+          user.path_file
+        );
+
+        // Cek apakah file ada dulu sebelum dihapus
+        if (fs.existsSync(oldImagePath)) {
+          fs.unlinkSync(oldImagePath); // hapus file lama
+        }
+      }
+
+      // Update data user dengan file baru
+      const updatedUser = await prisma.users.update({
+        where: { id: parseInt(id) },
+        data: {
+          path_file: file.filename,
+        },
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Foto profil berhasil diupdate",
+        data: updatedUser,
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({
+        success: false,
+        message: "Terjadi kesalahan saat update gambar",
+      });
+    }
+  }
+);
+
 app.patch("/api/v1/users/password/:id", async (req, res) => {
   try {
+    // console.log(req.body);
+    // console.log(parseInt(req.params.id));
+
     const { id } = req.params;
-    const { password } = req.body;
+    const { password, passwordLama } = req.body;
 
     // Cek apakah user ada
     const existingUser = await prisma.users.findUnique({
@@ -1247,6 +1356,15 @@ app.patch("/api/v1/users/password/:id", async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "User tidak ditemukan",
+      });
+    }
+
+    // Validasi password lama
+    const isMatch = await bcrypt.compare(passwordLama, existingUser.password);
+    if (!isMatch) {
+      return res.status(400).json({
+        success: false,
+        message: "Password lama tidak sesuai",
       });
     }
 
