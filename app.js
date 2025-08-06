@@ -440,6 +440,24 @@ app.get("/api/v1/product", async (req, res) => {
   }
 });
 
+app.get("/api/v1/product/count", async (req, res) => {
+  try {
+    const totalData = await prisma.product.count();
+
+    return res.status(200).send({
+      success: true,
+      message: "Total produk berhasil diambil",
+      total: totalData,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).send({
+      success: false,
+      message: "Terjadi kesalahan saat mengambil total produk",
+    });
+  }
+});
+
 app.get("/api/v1/product/search", async (req, res) => {
   try {
     const { keyword } = req.query;
@@ -455,7 +473,7 @@ app.get("/api/v1/product/search", async (req, res) => {
           select: {
             nama_toko: true,
             rating_toko: true,
-          },  
+          },
         },
       },
       where: {
@@ -1051,8 +1069,8 @@ app.post("/api/v1/product", uploadProduk.any(), async (req, res) => {
     });
 
     const idProduk = product.id;
-    console.log(idProduk);
-    
+    // console.log(idProduk);
+
     const folderFinal = `img/product/${idProduk}`;
     if (!fs.existsSync(folderFinal)) {
       fs.mkdirSync(folderFinal, { recursive: true });
