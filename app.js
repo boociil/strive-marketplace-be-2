@@ -443,7 +443,7 @@ app.get("/api/v1/product", async (req, res) => {
 app.get("/api/v1/product/count", async (req, res) => {
   try {
     const totalData = await prisma.product.count();
-
+    
     return res.status(200).send({
       success: true,
       message: "Total produk berhasil diambil",
