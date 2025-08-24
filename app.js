@@ -1,5 +1,8 @@
+const dotenv = require("dotenv");
 const express = require("express");
 const app = express();
+const dotenv = require("dotenv");
+dotenv.config();
 // var db = require('./dbconn');
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
@@ -124,6 +127,31 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Middleware untuk auth
 
+function authenticateToko(req, res, next) {
+  const token = req.headers["token"];
+  if (token == null)
+    return res.status(401).json({
+      success: false,
+      message: "Unauthorized",
+    }); // Unauthorized
+
+  jwt.verify(token, secretKey, (err, user) => {
+    if (err)
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden",
+      }); // Forbidden
+    req.user = user;
+    if (user.buka_toko === 1) {
+      next();
+    } else {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden",
+      }); // Forbidden
+    }
+  });
+}
 function authenticateAdmin(req, res, next) {
   const token = req.headers["token"];
   if (token == null)
@@ -147,6 +175,25 @@ function authenticateAdmin(req, res, next) {
         message: "Forbidden",
       }); // Forbidden
     }
+  });
+}
+
+function authenticateUser(req, res, next) {
+  const token = req.headers["token"];
+  if (token == null)
+    return res.status(401).json({
+      success: false,
+      message: "Unauthorized",
+    }); // Unauthorized
+
+  jwt.verify(token, secretKey, (err, user) => {
+    if (err)
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden",
+      }); // Forbidden
+    req.user = user;
+    next();
   });
 }
 
@@ -1046,7 +1093,7 @@ app.post("/api/v1/register", async (req, res) => {
   }
 });
 
-app.post("/api/v1/product", uploadProduk.any(), async (req, res) => {
+app.post("/api/v1/product", authenticateToko, uploadProduk.any(), async (req, res) => {
   try {
     console.log("Tambah produk");
 
@@ -1079,6 +1126,7 @@ app.post("/api/v1/product", uploadProduk.any(), async (req, res) => {
     let fileUtamaPath = [];
     req.files.forEach((file, i) => {
       const ext = path.extname(file.originalname).toLowerCase();
+      // Filter ekstensi
       const finalFileName = `${i}${ext}`;
       const finalPath = `${folderFinal}/${finalFileName}`;
       fs.renameSync(file.path, finalPath);
@@ -1106,7 +1154,7 @@ app.post("/api/v1/product", uploadProduk.any(), async (req, res) => {
 
 // DELETE API
 
-app.delete("/api/v1/product/:id", async (req, res) => {
+app.delete("/api/v1/product/:id", authenticateToko, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -1215,7 +1263,7 @@ app.delete("/api/v1/review/:id", async (req, res) => {
 
 // PATCH API
 
-app.patch("/api/v1/product/:id", uploadProduk.any(), async (req, res) => {
+app.patch("/api/v1/product/:id", authenticateToko, uploadProduk.any(), async (req, res) => {
   try {
     const { id } = req.params;
     const { nama, deskripsi, userId, kategori, harga = 0 } = req.body;
@@ -1306,7 +1354,7 @@ app.patch("/api/v1/product/:id", uploadProduk.any(), async (req, res) => {
   }
 });
 
-app.patch("/api/v1/users/:id", async (req, res) => {
+app.patch("/api/v1/users/:id", authenticateToko, async (req, res) => {
   try {
     console.log(req.body);
 
