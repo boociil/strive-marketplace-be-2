@@ -475,11 +475,18 @@ app.get("/api/v1/product", async (req, res) => {
   }
 });
 
-
 app.get("/api/v1/product/count", async (req, res) => {
   try {
-    const totalData = await prisma.product.count();
-    
+    const { kategori } = req.query;
+
+    const whereClause = kategori
+      ? { kategori: parseInt(kategori) } // filter berdasarkan kategori
+      : {}; // kalau tidak ada kategori, hitung semua
+
+    const totalData = await prisma.product.count({
+      where: whereClause,
+    });
+
     return res.status(200).send({
       success: true,
       message: "Total produk berhasil diambil",
@@ -1082,65 +1089,70 @@ app.post("/api/v1/register", async (req, res) => {
   }
 });
 
-app.post("/api/v1/product", authenticateToko, uploadProduk.any(), async (req, res) => {
-  try {
-    console.log("Tambah produk");
+app.post(
+  "/api/v1/product",
+  authenticateToko,
+  uploadProduk.any(),
+  async (req, res) => {
+    try {
+      console.log("Tambah produk");
 
-    const { nama, deskripsi, kategori, harga } = req.body;
-    const userId = req.user.id;
-    // console.log("BODY:", req.body);
-    // console.log("FILES:", req.files);
+      const { nama, deskripsi, kategori, harga } = req.body;
+      const userId = req.user.id;
+      // console.log("BODY:", req.body);
+      // console.log("FILES:", req.files);
 
-    // Simpan produk dulu dengan path kosong
-    const product = await prisma.product.create({
-      data: {
-        nama,
-        desc: deskripsi,
-        kategori: parseInt(kategori),
-        harga: parseInt(harga),
-        path: "",
-        user: {
-          connect: { id: parseInt(userId) },
+      // Simpan produk dulu dengan path kosong
+      const product = await prisma.product.create({
+        data: {
+          nama,
+          desc: deskripsi,
+          kategori: parseInt(kategori),
+          harga: parseInt(harga),
+          path: "",
+          user: {
+            connect: { id: parseInt(userId) },
+          },
         },
-      },
-    });
+      });
 
-    const idProduk = product.id;
-    // console.log(idProduk);
+      const idProduk = product.id;
+      // console.log(idProduk);
 
-    const folderFinal = `img/product/${idProduk}`;
-    if (!fs.existsSync(folderFinal)) {
-      fs.mkdirSync(folderFinal, { recursive: true });
+      const folderFinal = `img/product/${idProduk}`;
+      if (!fs.existsSync(folderFinal)) {
+        fs.mkdirSync(folderFinal, { recursive: true });
+      }
+
+      let fileUtamaPath = [];
+      req.files.forEach((file, i) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        // Filter ekstensi
+        const finalFileName = `${i}${ext}`;
+        const finalPath = `${folderFinal}/${finalFileName}`;
+        fs.renameSync(file.path, finalPath);
+        fileUtamaPath.push(`/${finalPath}`);
+      });
+
+      // Update path gambar utama
+      const updatedProduct = await prisma.product.update({
+        where: { id: idProduk },
+        data: {
+          path: JSON.stringify(fileUtamaPath), // array disimpan sebagai string JSON
+        },
+      });
+
+      res.json({ success: true, data: updatedProduct });
+    } catch (err) {
+      console.error("Gagal:", err);
+      res.status(500).json({
+        success: false,
+        message: "Gagal menambahkan produk",
+        error: err.message,
+      });
     }
-
-    let fileUtamaPath = [];
-    req.files.forEach((file, i) => {
-      const ext = path.extname(file.originalname).toLowerCase();
-      // Filter ekstensi
-      const finalFileName = `${i}${ext}`;
-      const finalPath = `${folderFinal}/${finalFileName}`;
-      fs.renameSync(file.path, finalPath);
-      fileUtamaPath.push(`/${finalPath}`);
-    });
-
-    // Update path gambar utama
-    const updatedProduct = await prisma.product.update({
-      where: { id: idProduk },
-      data: {
-        path: JSON.stringify(fileUtamaPath), // array disimpan sebagai string JSON
-      },
-    });
-
-    res.json({ success: true, data: updatedProduct });
-  } catch (err) {
-    console.error("Gagal:", err);
-    res.status(500).json({
-      success: false,
-      message: "Gagal menambahkan produk",
-      error: err.message,
-    });
   }
-});
+);
 
 // DELETE API
 
@@ -1253,96 +1265,101 @@ app.delete("/api/v1/review/:id", async (req, res) => {
 
 // PATCH API
 
-app.patch("/api/v1/product/:id", authenticateToko, uploadProduk.any(), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { nama, deskripsi, userId, kategori, harga = 0 } = req.body;
+app.patch(
+  "/api/v1/product/:id",
+  authenticateToko,
+  uploadProduk.any(),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { nama, deskripsi, userId, kategori, harga = 0 } = req.body;
 
-    console.log("Update produk dengan ID:", id);
-    if (!req.files || req.files.length === 0) {
-      console.log("Tidak ada file yang diupload");
-    }
+      console.log("Update produk dengan ID:", id);
+      if (!req.files || req.files.length === 0) {
+        console.log("Tidak ada file yang diupload");
+      }
 
-    const existingProduct = await prisma.product.findUnique({
-      where: { id: parseInt(id) },
-    });
+      const existingProduct = await prisma.product.findUnique({
+        where: { id: parseInt(id) },
+      });
 
-    if (!existingProduct) {
-      return res.status(404).json({
+      if (!existingProduct) {
+        return res.status(404).json({
+          success: false,
+          message: "Produk tidak ditemukan",
+        });
+      }
+
+      // Handle file gambar utama
+      let fileUtamaPath = [];
+
+      const fileUtamaBaru =
+        req.files?.filter((f) => f.fieldname === "files") || [];
+
+      if (fileUtamaBaru.length > 0) {
+        try {
+          // Hapus file lama
+          const pathLama = JSON.parse(existingProduct.path || "[]");
+          pathLama.forEach((p) => {
+            const fullPath = path.join(__dirname, p);
+            if (fs.existsSync(fullPath)) {
+              fs.unlinkSync(fullPath);
+            }
+          });
+        } catch (e) {
+          console.error("Gagal parsing atau hapus path lama:", e);
+        }
+      }
+
+      const folderFinal = `img/product/${id}`;
+      if (!fs.existsSync(folderFinal)) {
+        fs.mkdirSync(folderFinal, { recursive: true });
+      }
+
+      let fileIndex = 0;
+      for (const file of fileUtamaBaru) {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const finalFileName = `${fileIndex}${ext}`;
+        const finalPath = `${folderFinal}/${finalFileName}`;
+
+        fs.renameSync(file.path, finalPath);
+        fileUtamaPath.push(`/${finalPath}`);
+        fileIndex++;
+      }
+
+      const updateData = {
+        nama,
+        desc: deskripsi,
+        userId: parseInt(userId),
+        kategori: parseInt(kategori),
+        harga: parseInt(harga),
+      };
+
+      // Hanya tambahkan path jika ada file baru
+      if (fileUtamaPath.length > 0) {
+        updateData.path = JSON.stringify(fileUtamaPath);
+      }
+
+      const updatedProduct = await prisma.product.update({
+        where: { id: parseInt(id) },
+        data: updateData,
+      });
+
+      res.json({
+        success: true,
+        message: "Produk berhasil diperbarui",
+        data: updatedProduct,
+      });
+    } catch (error) {
+      console.error("Server error:", error);
+      res.status(500).json({
         success: false,
-        message: "Produk tidak ditemukan",
+        message: "Terjadi kesalahan saat update produk",
+        error: error.message,
       });
     }
-
-    // Handle file gambar utama
-    let fileUtamaPath = [];
-
-    const fileUtamaBaru =
-      req.files?.filter((f) => f.fieldname === "files") || [];
-
-    if (fileUtamaBaru.length > 0) {
-      try {
-        // Hapus file lama
-        const pathLama = JSON.parse(existingProduct.path || "[]");
-        pathLama.forEach((p) => {
-          const fullPath = path.join(__dirname, p);
-          if (fs.existsSync(fullPath)) {
-            fs.unlinkSync(fullPath);
-          }
-        });
-      } catch (e) {
-        console.error("Gagal parsing atau hapus path lama:", e);
-      }
-    }
-
-    const folderFinal = `img/product/${id}`;
-    if (!fs.existsSync(folderFinal)) {
-      fs.mkdirSync(folderFinal, { recursive: true });
-    }
-
-    let fileIndex = 0;
-    for (const file of fileUtamaBaru) {
-      const ext = path.extname(file.originalname).toLowerCase();
-      const finalFileName = `${fileIndex}${ext}`;
-      const finalPath = `${folderFinal}/${finalFileName}`;
-
-      fs.renameSync(file.path, finalPath);
-      fileUtamaPath.push(`/${finalPath}`);
-      fileIndex++;
-    }
-
-    const updateData = {
-      nama,
-      desc: deskripsi,
-      userId: parseInt(userId),
-      kategori: parseInt(kategori),
-      harga: parseInt(harga),
-    };
-
-    // Hanya tambahkan path jika ada file baru
-    if (fileUtamaPath.length > 0) {
-      updateData.path = JSON.stringify(fileUtamaPath);
-    }
-
-    const updatedProduct = await prisma.product.update({
-      where: { id: parseInt(id) },
-      data: updateData,
-    });
-
-    res.json({
-      success: true,
-      message: "Produk berhasil diperbarui",
-      data: updatedProduct,
-    });
-  } catch (error) {
-    console.error("Server error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan saat update produk",
-      error: error.message,
-    });
   }
-});
+);
 
 app.patch("/api/v1/users/:id", authenticateToko, async (req, res) => {
   try {
