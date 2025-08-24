@@ -398,7 +398,7 @@ app.get("/api/v1/users", async (req, res) => {
 
 app.get("/api/v1/product", async (req, res) => {
   try {
-    const { total, page, orderBy, keyword, idToko } = req.query;
+    const { total, page, orderBy, keyword, idToko, kategori } = req.query;
 
     const keywordTrimmed = keyword ? keyword.trim() : undefined;
 
@@ -412,26 +412,31 @@ app.get("/api/v1/product", async (req, res) => {
     let totalQ = parseInt(total) || 10;
     let pageQ = parseInt(page) || 1;
 
+    // Buat where clause dinamis
+    const whereClause = {
+      nama: keywordTrimmed
+        ? {
+            contains: keywordTrimmed,
+            mode: "insensitive",
+          }
+        : undefined,
+      userId: idToko ? parseInt(idToko) : undefined,
+      kategori: kategori ? parseInt(kategori) : undefined, // ✅ filter kategori
+    };
+
     // Hitung total hasil pencarian
     const totalData = await prisma.product.count({
-      where: {
-        nama: keywordTrimmed
-          ? {
-              contains: keywordTrimmed,
-              mode: "insensitive",
-            }
-          : undefined,
-        userId: idToko ? parseInt(idToko) : undefined,
-      },
+      where: whereClause,
     });
 
-    // Hitung skip, jika skip melebihi total data, kembalikan data kosong
+    // Hitung skip
     const skip = (pageQ - 1) * totalQ;
     if (skip >= totalData) {
       return res.status(200).send({
         success: true,
         message: "Req berhasil",
         data: [],
+        totalData,
       });
     }
 
@@ -451,25 +456,9 @@ app.get("/api/v1/product", async (req, res) => {
       },
       take: totalQ,
       skip: skip,
-      where: {
-        nama: keywordTrimmed
-          ? {
-              contains: keywordTrimmed,
-              mode: "insensitive",
-            }
-          : undefined,
-        userId: idToko ? parseInt(idToko) : undefined,
-      },
+      where: whereClause,
+      orderBy: order, // ✅ orderBy Prisma langsung dipakai
     });
-
-    // Urutkan jika orderBy harga diberikan
-    // if (orderBy === "harga_desc" || orderBy === "harga_asc") {
-    //   result.sort((a, b) => {
-    //     const hargaA = a.harga[0]?.harga ?? 0;
-    //     const hargaB = b.variasi[0]?.harga ?? 0;
-    //     return orderBy === "harga_desc" ? hargaB - hargaA : hargaA - hargaB;
-    //   });
-    // }
 
     return res.status(200).send({
       success: true,
@@ -485,6 +474,7 @@ app.get("/api/v1/product", async (req, res) => {
     });
   }
 });
+
 
 app.get("/api/v1/product/count", async (req, res) => {
   try {
@@ -1096,9 +1086,10 @@ app.post("/api/v1/product", authenticateToko, uploadProduk.any(), async (req, re
   try {
     console.log("Tambah produk");
 
-    const { nama, deskripsi, userId, kategori = 0, harga } = req.body;
-    console.log("BODY:", req.body);
-    console.log("FILES:", req.files);
+    const { nama, deskripsi, kategori, harga } = req.body;
+    const userId = req.user.id;
+    // console.log("BODY:", req.body);
+    // console.log("FILES:", req.files);
 
     // Simpan produk dulu dengan path kosong
     const product = await prisma.product.create({
